@@ -1,7 +1,7 @@
 // Zero-dep сборщик: src/* → dist-single/index.html (один файл) + dist/ (PWA). Запуск: node build.mjs
 import{readFileSync,writeFileSync,mkdirSync}from'node:fs';import{createHash}from'node:crypto';
-export const ORDER=['core/core.js','protocol/hash.js','integrity/core.js','adapters/ports.js','ui/i18n.js','ui/i18n-int.js','state/store.js','util/util.js',
-  'ble/transport.js','protocol/auth.js','protocol/meta.js','image/image.js','ota/flasher.js','integrity/session.js','ui/render.js','main.js'];
+export const ORDER=['protocol/jl-auth.js','core/core.js','protocol/hash.js','integrity/core.js','adapters/ports.js','ui/i18n.js','ui/i18n-int.js','state/store.js','util/util.js',
+  'ble/transport.js','protocol/testmode.js','protocol/auth.js','protocol/meta.js','image/image.js','ota/flasher.js','integrity/session.js','ui/render.js','main.js'];
 const root=new URL('./',import.meta.url),src=f=>readFileSync(new URL('src/'+f,root),'utf8'),out=(f,d)=>{mkdirSync(new URL(f.replace(/[^/]+$/,''),root),{recursive:true});writeFileSync(new URL(f,root),d)};
 const js="'use strict';\n"+ORDER.map(f=>`/* ---- src/${f} ---- */\n${src(f)}`).join('\n');
 if(/<\/script/i.test(js))throw new Error('</script> inside JS');

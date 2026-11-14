@@ -25,9 +25,9 @@ function init(){
   $('#fileProf').onchange=async e=>{try{const o=JSON.parse(await e.target.files[0].text());
       for(const p of Object.values(o))if(!p.match||!p.family||!Array.isArray(p.match.gattServices))throw new Error('bad profile');
       for(const p of Object.values(o)){if(p.ubootSha256Allowlist)p.ubootSha256Allowlist=p.ubootSha256Allowlist.map(h=>h.toLowerCase());(p.knownGoodImages||[]).forEach(x=>x.sha256=x.sha256.toLowerCase())}
-      S.profiles=o;SV('profiles.v2',o);toast('profiles ✓','ok')}catch(x){toast('profiles: '+x.message,'block')}e.target.value='';render()};
+      S.profiles=o;SV('profiles.v3',o);toast('profiles ✓','ok')}catch(x){toast('profiles: '+x.message,'block')}e.target.value='';render()};
   $('#btnExpProf').onclick=()=>download('profiles.json',S.profiles);
-  $('#btnReset').onclick=()=>{S.profiles=structuredClone(PROFILES);SV('profiles.v2',null);Object.entries(DEF).forEach(([k,v])=>setSetting(k,v))};
+  $('#btnReset').onclick=()=>{S.profiles=structuredClone(PROFILES);SV('profiles.v3',null);Object.entries(DEF).forEach(([k,v])=>setSetting(k,v))};
   $('#btnRb').onclick=()=>reverify('L1');$('#btnRh').onclick=()=>reverify('L2');
   $('#btnAccept').onclick=()=>{if(S.int&&S.int.verdict==='partial'){S.int.acceptedPartial=true;idb('sessions',{integrity:S.int});render()}};
   $('#btnDump').onclick=takeDump;$('#btnSpot').onclick=spotCheck;$('#btnCertWired').onclick=certifyWired;

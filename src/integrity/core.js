@@ -56,9 +56,9 @@ async function asyncSelfTest(){
   ok('R-FORM: on-flash profile rejects plaintext digest',!compareForm(c.plain,c,'on-flash').match);
   ok('R-FORM: missing slice of profile form → E-INT-005',compareForm(c.onflash,{plain:c.plain},'on-flash').code==='E-INT-005');
   const L0={imageSha256:'h',chunkCrc:{ok:10,fail:0},wholeFileCrc16:{value:1,ok:true},ufwCrc:{},internalJlCrcOk:true,bootMarker:{ok:true,value:null},nameChanged:true,versionBefore:null,versionAfter:null};
-  const resp=(st,d)=>{const u=new Uint8Array(37);u[0]=0xD5;u[1]=st;u[2]=1;if(d)u.set(fromHex(d),3);const x=crc16(u.subarray(1,35));u[35]=x>>8;u[36]=x&255;return u};
-  const io=h=>({req:async(k,b)=>{const r=h(Uint8Array.from(b));if(!r)throw new Error('timeout');return{k,u:r}}});
-  const dev=(d,st=0)=>io(b=>b[0]===0xD7?Uint8Array.of(0xD7,0,0,0,0,CAPS.HASH_RANGE):b[0]===0xD5&&st>=0?resp(st,d):null);
+  const resp=(st,d)=>{const u=new Uint8Array(36);u[0]=st;u[1]=1;if(d)u.set(fromHex(d),2);const x=crc16(u.subarray(0,34));u[34]=x>>8;u[35]=x&255;return u};
+  const io=h=>({qreq:async(cmd,p)=>{const r=h(cmd,Uint8Array.from(p));if(!r)throw new Error('timeout');return{cmd,payload:r}}});
+  const dev=(d,st=0)=>io(c=>c===0xD7?Uint8Array.of(0,0,0,0,CAPS.HASH_RANGE):c===0xD5&&st>=0?resp(st,d):null);
   const run=(D,o={})=>verifyFlash({l0:o.l0||L0,span,cands:c,form:o.form??null,caps:()=>readCaps(D,50),hash:(a,l)=>hashRange(D,a,l,0x400000,50),
     readback:o.rb||null,sha:sha256hex,onCalibrate:o.cal||(()=>{})});
   let r=await run(dev(c.onflash),{form:'on-flash'});ok('L2: HASH_RANGE match → verified',r.level==='L2'&&r.verdict==='verified');
@@ -68,7 +68,7 @@ async function asyncSelfTest(){
   r=await run(dev(null,-1));ok('HASH_RANGE timeout → E-INT-008 → partial',r.verdict==='partial'&&has(r,'E-INT-008'));
   r=await run(io(()=>null));ok('no Caps, no readback → L0 partial',r.level==='L0'&&r.verdict==='partial');
   r=await run(dev(c.onflash),{l0:{...L0,chunkCrc:{ok:9,fail:1}}});ok('L0: chunk CRC fail → failed',r.verdict==='failed');
-  const bad=resp(0,c.onflash);bad[36]^=1;let thrown=false;try{parseHashResp(bad)}catch{thrown=true}ok('HASH_RANGE: response CRC checked',thrown);
+  const bad=resp(0,c.onflash);bad[35]^=1;let thrown=false;try{parseHashResp(bad)}catch{thrown=true}ok('HASH_RANGE: response CRC checked',thrown);
   const prof={flash:{size:0x10000,appSlot:0x8000}},dump=Uint8Array.from({length:0x10000},(_,i)=>i*7&255),pp={deviceId:'dev'},
     jl={decrypt:async x=>x,parseHeader:async()=>true,verifyCrcs:async()=>true,layoutOk:async()=>true,sha:sha256hex,spotN:8,rand:()=>.5};
   let ct=await validateDump(dump,pp,prof,'ble-testmode',{...jl,reRead:async(a,l)=>dump.slice(a,a+l)});ok('dump: BLE + spot-check clean → verified',ct.verified&&ct.checks.spotOk);

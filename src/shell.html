@@ -73,6 +73,7 @@
         <button id="btnDump" class="btn btn--s" data-i18n="takeDump"></button><button id="btnSpot" class="btn btn--s" data-i18n="spot"></button>
         <button id="btnExpCert" class="btn btn--s">dump.cert.json</button><button id="btnExpInt" class="btn btn--s">integrity-report.json</button>
       </div>
+      <p id="dumpHint" class="note"></p>
       <details class="fold"><summary data-i18n="certView"></summary><pre id="certPre" class="mono pre"></pre></details>
     </div>
     <div class="logbar"><h3 data-i18n="log"></h3><button id="btnCopyLog" class="btn btn--s" data-i18n="copy"></button><button id="btnDlLog" class="btn btn--s">session.log</button></div>
@@ -91,6 +92,7 @@
       <label><span data-i18n="s_lang"></span><select data-set="lang"><option value="ru">Русский</option><option value="en">English</option></select></label>
       <label class="chk"><input type="checkbox" data-set="expert"><span data-i18n="s_expert"></span></label>
       <label class="chk"><input type="checkbox" data-set="chime"><span data-i18n="s_chime"></span></label>
+      <label><span data-i18n="s_dumpChunk"></span><input type="number" data-set="dumpChunk" min="16" max="1024" step="16"></label>
       <label class="chk"><input type="checkbox" data-set="rcspPreAuth"><span data-i18n="s_preAuth"></span></label>
       <label class="chk"><input type="checkbox" data-set="readbackOffer"><span data-i18n="s_rbOffer"></span></label>
       <label><span data-i18n="s_spotN"></span><input type="number" data-set="spotN" min="4" max="64"></label>

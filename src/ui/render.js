@@ -10,8 +10,8 @@ function render(){
   $('#hdrName').textContent=(P&&P.name)||(S.dev&&S.dev.name)||'—';$('#hdrBatt').textContent=P&&P.battery.level!=null?`🔋${P.battery.level}%`:'';
   $('#btnConn').textContent=on?t('disc'):t('conn');$('#btnConnAll').hidden=on;
   kv('#passKv',P&&{name:P.name,deviceId:P.deviceId,chipFamily:P.chipFamily,sdkString:P.sdkString,fwVersion:P.fwVersion,productName:P.productName,
-    display:P.display&&`${P.display.width}×${P.display.height} · ${P.display.w2}×${P.display.h2} · f5=${P.display.f5} f6=${P.display.f6} f7=${P.display.f7}`,variant:P.variant,
-    battery:`${P.battery.level??'—'}% charging=${P.battery.charging}`,auth:P.auth.ok?'ok, profile '+P.auth.keyProfile:'—',profileId:P.profileId||'— (OTA BLOCK)',
+    display:P.display&&`${P.display.width}×${P.display.height} · ${P.display.w2}×${P.display.h2} · f5=${P.display.f5} f6=${P.display.f6} f7=${P.display.f7}`,variant:P.variant,mac:P.mac,targetInfo:P.targetInfo&&JSON.stringify(P.targetInfo),sysInfo:P.sysInfo&&JSON.stringify(P.sysInfo),
+    battery:P.battery.level==null?'— (нет push 0x27)':`${P.battery.level}% (mode ${P.battery.mode??'—'})`,auth:P.auth.ok?'ok, profile '+P.auth.keyProfile:'—',profileId:P.profileId||'— (OTA BLOCK)',
     capabilities:Object.entries(P.capabilities).filter(x=>x[1]).map(x=>x[0]).join(', ')||'—',testModeSuspected:P.testModeSuspected,capturedAt:P.capturedAt},t('noDev'));
   $('#gattPre').textContent=S.gatt?Object.entries(S.gatt.chars).map(([s,c])=>s+'\n  '+c.join('\n  ')).join('\n'):'—';
   kv('#imgKv',R&&{fileName:R.fileName,size:`${R.size} B`,sha256:R.sha256,kind:R.kind,qixWrapped:R.qixWrapped,chipkey:hx(R.chipkey),ubootHash:R.ubootHash,appBinSize:hx(R.appBinSize),
@@ -33,6 +33,6 @@ function renderAllow(){$('#alList').innerHTML=['image','uboot'].flatMap(k=>S.all
 function applyI18n(){document.documentElement.lang=S.set.lang;document.documentElement.dataset.theme=S.set.theme;
   document.querySelectorAll('[data-i18n]').forEach(e=>e.textContent=t(e.dataset.i18n));document.querySelectorAll('[data-i18n-ph]').forEach(e=>e.placeholder=t(e.dataset.i18nPh));
   $('#btnLang').textContent=S.set.lang==='en'?'RU':'EN';
-  authSelfTest();const tests=[...selfTest(),...(S.asyncTests||[]),...['A','B'].map(i=>({n:`auth ${i}: ${AUTH.encrypt?(AUTH.profiles[i].vector?'test vector':'no vector'):'PORT: jl-auth'}`,ok:AUTH.ok[i]}))];
+  authSelfTest();const tests=[...selfTest(),...(S.asyncTests||[]),...Object.keys(AUTH.profiles).map(i=>({n:`auth profile ${i}: ${(AUTH.profiles[i].vectors||[]).length} vectors`,ok:AUTH.ok[i]}))];
   $('#tests').innerHTML=tests.map(x=>`<li class="${x.ok?'ok':'no'}">${x.ok?'✓':'✕'} ${esc(x.n)}</li>`).join('');render()}
 function setSetting(k,v){S.set[k]=v;SV('set',S.set);document.querySelectorAll(`[data-set="${k}"]`).forEach(el=>el.type==='checkbox'?el.checked=v:el.value=v);applyI18n();if(k==='expert')rebuildLog();if(k==='verifySpan')computeSlices().then(render)}

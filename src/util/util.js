@@ -21,7 +21,7 @@ const idbPut=(s,k,v)=>idbDo(s,'readwrite',st=>st.put(v,k));
 function chime(){if(!S.set.chime)return;try{const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=880;g.gain.value=.04;o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.15);o.onended=()=>a.close()}catch{}}
 
 /* ===== log ===== */
-function log(dir,ch,u8,note=''){const e={ts:new Date().toISOString(),dir,ch,hex:u8?hex(u8):'',note};S.log.push(e);
+function log(dir,ch,u8,note=''){if(S.quiet&&dir!=='EV')return;const e={ts:new Date().toISOString(),dir,ch,hex:u8?hex(u8):'',note};S.log.push(e);
   if(S.log.length>50000)S.log.splice(0,10000); // shortcut: кольцевой буфер; полный лог сессии — в IndexedDB по завершении прошивки
   appendLog(e)}
 function appendLog(e){if(!S.set.expert&&e.dir!=='EV'&&!e.note)return;const li=document.createElement('li');li.className=e.dir.toLowerCase();
@@ -29,7 +29,7 @@ function appendLog(e){if(!S.set.expert&&e.dir!=='EV'&&!e.note)return;const li=do
   const L=$('#log');L.append(li);while(L.childElementCount>400)L.firstChild.remove();L.scrollTop=L.scrollHeight}
 const rebuildLog=()=>{$('#log').textContent='';S.log.slice(-1500).forEach(appendLog)};
 const logText=()=>S.log.map(e=>`${e.ts} ${e.dir} ${e.ch} ${e.hex} ${e.note}`).join('\n');
-function decode(k,u){if(u[0]===0xFE&&u[1]===0xDC&&u[2]===0xBA)return`FE flag=${hx(u[3])} cmd=${hx(u[4])} len=${(u[5]<<8)|u[6]}`;
+function decode(k,u){if(u[0]===0xFE&&u[1]===0xDC&&u[2]===0xBA){const r=parseRcspResp(u);return`FE flag=${hx(u[3])} cmd=${hx(u[4])} len=${u[5]<<8|u[6]}${r&&u[3]===0?' status='+r.status:''}`}
   const f=parse9E(u);if(f){const c=f.cmd===0xC7?decodeC7(f.payload):null,a=ascii(f.payload).trim();
-    return`9E cmd=${hx(f.cmd)} len=${f.len}${f.complete?'':' (partial)'}${c?' '+JSON.stringify(c):a.length>=4?' "'+a.replace(/\n/g,' ')+'"':''}`}
+    return`9E cmd=${hx(f.cmd)} len=${f.len}${f.ok?'':' !chk'}${c?' '+JSON.stringify(c):f.cmd===0x27&&f.len===2?` battery ${f.payload[1]}% mode=${f.payload[0]}`:a.length>=4?' "'+a.replace(/\n/g,' ')+'"':''}`}
   if(k==='ae02'&&u.length<=17)return'auth';return''}

@@ -5,11 +5,8 @@ const hx=n=>n==null?'—':'0x'+n.toString(16).toUpperCase();
 const eq=(a,b)=>!!a&&!!b&&a.length===b.length&&a.every((x,i)=>x===b[i]);
 
 const PROFILES={
-  'e87-ac707n':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE'],chars:['fd00']},family:'AC707N/BR35',ota:true,chipkey:0x9847,
+  'e87-ac707n':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE'],chars:['fd01','fd02','fd03']},family:'AC707N/BR35',ota:true,chipkey:0x9847,
     flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},ubootSha256Allowlist:[],knownGoodImages:[],expectedForm:null,verifySpan:[0,0xFC000]},
-  // HIL 2026-11-15: E87 с сервисом C2E6FD00, но без характеристики FD00 → Qix-OTA невозможен, только инспекция
-  'e87-ac707n-rcsp':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE'],charsAbsent:['fd00']},family:'AC707N/BR35',ota:false,chipkey:0x9847,
-    flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000}},
   'e87-ac697x':{match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC697x/BR30',ota:false},
   'e87-ac701n':{match:{sdkRegex:'jl_sdk_ac701',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC701N/BR28',ota:false}};
 const familyOf=s=>/ac707/.test(s||'')?'AC707N/BR35':/ac697/.test(s||'')?'AC697x/BR30':/ac701/.test(s||'')?'AC701N/BR28':'unknown';
@@ -19,7 +16,29 @@ function matchProfile(P,profiles){
       &&(m.chars||[]).every(c=>(P.charIds||[]).includes(c))&&!(m.charsAbsent||[]).some(c=>(P.charIds||[]).includes(c)))return id}
   return null}
 // 9E-кадр: [0]=9E [1],[2]=? (меняются; seq/чексумма не подтверждены) [3]=cmd [4..5]=len LE [6..]=payload — сходится на всех TX/RX лога
-function parse9E(u){if(u[0]!==0x9E||u.length<6)return null;const len=u[4]|u[5]<<8;return{b1:u[1],b2:u[2],cmd:u[3],len,payload:u.slice(6,6+len),complete:u.length>=6+len}}
+function parse9E(u){if(u[0]!==0x9E||u.length<6)return null;const len=u[4]|u[5]<<8;let s=0;for(let i=2;i<Math.min(u.length,6+len);i++)s+=u[i];
+  return{chk:u[1],flags:u[2],cmd:u[3],len,payload:u.slice(6,6+len),complete:u.length>=6+len,ok:(s&255)===u[1]}}
+// Qix 9E: [9E][chk = sum(bytes[2:]) & FF][flags][cmd][len LE16][payload] — qix-ble frame.py, сверено с кадрами лога
+function qixEncode(flags,cmd,payload=[]){const p=Uint8Array.from(payload),b=new Uint8Array(6+p.length);b[0]=0x9E;b[2]=flags;b[3]=cmd;b[4]=p.length&255;b[5]=p.length>>8;b.set(p,6);
+  let s=0;for(let i=2;i<b.length;i++)s+=b[i];b[1]=s&255;return b}
+// поток → кадр: пропуск мусора до 9E, ожидание неполного, повтор со сдвигом при битой сумме
+function qixTake(buf){let b=buf,skipped=0;
+  for(;;){const i=b.indexOf(0x9E);if(i<0)return{frame:null,rest:new Uint8Array(0),skipped:skipped+b.length};
+    if(i){skipped+=i;b=b.subarray(i)}if(b.length<6)return{frame:null,rest:b.slice(),skipped};
+    const tot=6+(b[4]|b[5]<<8);if(tot>8192){b=b.subarray(1);skipped++;continue}if(b.length<tot)return{frame:null,rest:b.slice(),skipped};
+    let s=0;for(let k=2;k<tot;k++)s+=b[k];if((s&255)===b[1])return{frame:b.slice(0,tot),rest:b.slice(tot),skipped};b=b.subarray(1);skipped++}}
+// RCSP FE: [FE DC BA][flag][cmd][len BE16][body][EF] — qix-ble rcsp_frame.py
+function feTake(b){if(b.length<7)return{frame:null,rest:b};if(!(b[0]===0xFE&&b[1]===0xDC&&b[2]===0xBA))return{frame:b,rest:new Uint8Array(0)};
+  const tot=8+(b[5]<<8|b[6]);if(tot>8192)return{frame:b,rest:new Uint8Array(0)};if(b.length<tot)return{frame:null,rest:b};
+  return b[tot-1]===0xEF?{frame:b.slice(0,tot),rest:b.slice(tot)}:{frame:b,rest:new Uint8Array(0)}}
+const parseRcspResp=u=>{const len=u[5]<<8|u[6],body=u.subarray(7,7+len);return body.length<2?null:{flag:u[3],cmd:u[4],status:body[0],sn:body[1],data:body.subarray(2)}};
+const parseTlv=p=>{const out=[];for(let i=0;i<p.length;){const n=p[i];if(n<1||i+1+n>p.length)break;out.push({type:p[i+1],data:p.slice(i+2,i+1+n)});i+=1+n}return out};
+const TI_NAMES={0:'protocol_version',1:'power_up_sys_info',2:'edr_addr',3:'platform',4:'function_info',5:'firmware_info',6:'sdk_type',7:'uboot_version',8:'support_double_backup',
+  9:'mandatory_upgrade_flag',10:'vid_pid',11:'auth_key',12:'project_code',13:'fw_version',14:'allow_connect',16:'name',17:'connect_ble_only',31:'custom_ver'};
+function decodeTargetInfo(attrs){const o={};for(const{type,data}of attrs){const n=TI_NAMES[type]||'attr_'+type,txt=data.every(b=>b>=32&&b<127)&&data.length?String.fromCharCode(...data):null;
+  o[n]=type===2&&data.length===6?hex(data,':').toLowerCase():type===10&&data.length>=4?`vid=${hx(data[0]<<8|data[1])} pid=${hx(data[2]<<8|data[3])}`:
+    type===13&&data.length>=4?Array.from(data.subarray(0,4)).join('.'):txt||hex(data,'')}return o} // fw_version: трактовка 4 байт неоднозначна (qix-ble sysinfo.py)
+const GENERIC4M={family:'unknown',flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000}};
 // C7 (ответ на C6), 13 B, u16 BE. 360×360 совпадает с панелью из ТЗ; назначение w2/h2 (368) и f5..f7 не подтверждено
 function decodeC7(p){if(!p||p.length<13)return null;const b=o=>p[o]<<8|p[o+1];return{width:b(0),height:b(2),w2:b(4),h2:b(6),f5:b(8),f6:p[10],f7:b(11)}}
 const profileForSdk=(sdk,profiles)=>sdk?Object.keys(profiles).find(id=>new RegExp(profiles[id].match.sdkRegex).test(sdk))||null:null;
@@ -88,11 +107,22 @@ function selfTest(){
   ok('CRC-16/XMODEM "123456789" = 0x31C3',crc16(new TextEncoder().encode('123456789'))===0x31C3);
   let f=fixture();ok('rules: reference → ALLOW',evaluate(f.P,f.R,f.c).overall==='ALLOW');
   const c7=parse9E(fromHex('9E 8D 00 C7 0D 00 01 68 01 68 01 70 01 70 01 F4 10 00 00')),d7=c7&&decodeC7(c7.payload);
-  ok('9E/C7 frame from E87 log → 360×360, 368×368, 500, 16',!!d7&&c7.cmd===0xC7&&c7.len===13&&c7.complete&&d7.width===360&&d7.height===360&&d7.w2===368&&d7.h2===368&&d7.f5===500&&d7.f6===16);
-  ok('9E: TX time frame parses (len 7)',parse9E(fromHex('9E 45 08 02 07 00 07 EA 0B 0F 00 01 23')).len===7);
+  ok('9E/C7 from E87 log: checksum ok, 360×360, 368×368',!!d7&&c7.ok&&c7.cmd===0xC7&&d7.width===360&&d7.h2===368&&d7.f5===500&&d7.f6===16);
+  const bp=parse9E(fromHex('9E 91 09 27 02 00 00 5F'));ok('9E/0x27 battery push from E87 log: 95%',bp.ok&&bp.cmd===0x27&&bp.payload[1]===95);
+  ok('qixEncode: heartbeat = 9E B5 0B 29 01 00 80',hex(qixEncode(0x0B,0x29,[0x80]))==='9E B5 0B 29 01 00 80');
+  ok('qixEncode: C6 = 9E D3 0B C6 01 00 01',hex(qixEncode(0x0B,0xC6,[1]))==='9E D3 0B C6 01 00 01');
+  const full=fromHex('9E 8D 00 C7 0D 00 01 68 01 68 01 70 01 70 01 F4 10 00 00');let q=qixTake(Uint8Array.of(0x11,0x22,...full.subarray(0,10)));
+  const q2=qixTake(Uint8Array.of(...q.rest,...full.subarray(10)));ok('qixTake: garbage + fragmented frame → 1 frame',!q.frame&&q.skipped===2&&!!q2.frame&&eq(q2.frame,full));
+  const ti=fromHex('fe dc ba c0 03 00 06 74 ff ff ff ff 00 ef');let f1=feTake(ti.subarray(0,9)),f2=feTake(Uint8Array.of(...f1.rest,...ti.subarray(9)));
+  ok('feTake: fragmented RCSP frame (btsnoop GetTargetInfo)',!f1.frame&&!!f2.frame&&eq(f2.frame,ti));
+  const tlv=decodeTargetInfo(parseTlv(Uint8Array.of(5,16,116,101,115,116,7,2,0x12,0x34,0x56,0x78,0x9a,0xbc,5,10,0x05,0xb9,0xab,0xcd,5,13,1,16,2,28)));
+  ok('target_info TLV: name / MAC / vid_pid / fw',tlv.name==='test'&&tlv.edr_addr==='12:34:56:78:9a:bc'&&tlv.vid_pid==='vid=0x5B9 pid=0xABCD'&&tlv.fw_version==='1.16.2.28');
+  if(typeof functionE1test==='function'){const K=fromHex('06775F87918DD423005DF1D8CF0C142B'),M=fromHex('112233332211'),E=i=>hex(functionE1test([...M],[...fromHex(i)],[...K]),'');
+    ok('jl-auth: ТЗ-вектор + 3 KAT (2 с железа E87)',[['70B75992E05EA78FEC533BA12979B590','FFE9E6C80CE1F40F5CCEAE20831C5879'],['b6e080ecaff322916d88fad5aa34c2ac','1d8897ac4604d332e8175e81bb292524'],
+      ['a53057d376fc0476e5dc68273b5e791e','b3242d82e1df6c545895ecae13b44fea'],['384ac9d8e481e5caaeb8cead20ee8f9e','fe1b5b643a790fdcf585e354dd377b0f']].every(([i,o])=>E(i)===o.toUpperCase()))}
   const mp=ids=>matchProfile({sdkString:'jl_sdk_ac707_publish',name:'E87',gatt:{services:['0000ae00-0000-1000-8000-00805f9b34fb','c2e6fd00-e966-1000-8000-bef9c223df6a']},charIds:ids},PROFILES);
-  ok('profile: AC707N without FD00 char → e87-ac707n-rcsp (READ-ONLY)',mp(['ae01','ae02','fd01','fd02','fd03','fd04','fd05'])==='e87-ac707n-rcsp');
-  ok('profile: AC707N with FD00 char → e87-ac707n',mp(['ae01','ae02','fd00','fd01'])==='e87-ac707n');
+  ok('profile: AC707N + FD01/FD02/FD03 → e87-ac707n',mp(['ae01','ae02','fd01','fd02','fd03','fd04','fd05'])==='e87-ac707n');
+  ok('profile: without FD02 → none',mp(['ae01','ae02','fd01','fd03'])===null);
   const sevOf=(f,id)=>evaluate(f.P,f.R,f.c).rules.find(r=>r.id===id).severity;
   f=fixture();f.R.internalJlCrcOk=null;ok('R-CRC: internal JL CRC unknown → BLOCK',sevOf(f,'R-CRC')==='block');
   f=fixture();f.c.profiles={...PROFILES,'e87-ac707n':{...PROFILES['e87-ac707n'],expectedForm:'on-flash'}};f.R.slices.plain=null;

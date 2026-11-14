@@ -8,7 +8,7 @@ async function withWake(fn){let wl=null;try{if('wakeLock' in navigator)wl=await 
 
 async function runVerify(mode){ // 'auto' | 'L1' | 'L2'
   const prof=S.profiles[S.P&&S.P.profileId];if(!prof)throw new Error('E-OTA-005 profile lost');
-  const io={req},span=spanNow();
+  const io={qreq},span=spanNow();
   const rep=await verifyFlash({l0:S.l0,span,cands:S.R.slices,form:prof.expectedForm||null,
     caps:mode==='L1'?async()=>0:()=>readCaps(io,S.set.reqTo),
     hash:async(a,l)=>{setPhase('verifying-hash');if(QIX.enterService)await QIX.enterService(rctx());return hashRange(io,a,l,prof.flash.size,S.set.hashTo)},
@@ -17,7 +17,7 @@ async function runVerify(mode){ // 'auto' | 'L1' | 'L2'
       setPhase('verifying-readback');S.flags.testMode=true;saveFlags(); // readback = TEST_MODE → R-TEST до power-cycle
       S.prog={done:0,total:l,t0:performance.now(),start:0,win:0};
       const rb=await READBACK.dumpRange(rctx(),a,l,d=>{S.prog.done=d;tick()});toast(t('needPC'),'warn');return rb},
-    sha:sha256hex,onCalibrate:f=>{prof.expectedForm=f;SV('profiles.v2',S.profiles);log('EV','',null,'form calibrated → '+f)}});
+    sha:sha256hex,onCalibrate:f=>{prof.expectedForm=f;SV('profiles.v3',S.profiles);log('EV','',null,'form calibrated → '+f)}});
   S.int={...rep,acceptedPartial:false};log('EV','',null,`integrity ${rep.level} ${rep.verdict} ${rep.errors.join(', ')}`);
   idb('sessions',{integrity:S.int});render();return S.int}
 async function reverify(mode){
@@ -38,21 +38,23 @@ async function certify(buf,passport,prof,method){
   await signCert(c);S.dumpCert={...c,sigOk:true};
   log('EV','',null,`certificate ${method} verified=${c.verified} ${c.errors.join(', ')}`);toast(t(c.verified?'certOk':'certBad'),c.verified?'ok':'block');render();return c}
 async function takeDump(){
-  if(!READBACK.ready||S.conn!=='on'||!S.P||!S.P.profileId||ACTIVE.includes(S.phase)||!confirm(t('dumpConfirm')))return;
-  const prof=S.profiles[S.P.profileId],passport=structuredClone(S.P);S.flags.dump=S.flags.testMode=true;saveFlags();
+  if(dumpBlockers().length||!confirm(t('dumpConfirm')))return;
+  const prof=S.profiles[S.P.profileId]||GENERIC4M,passport=structuredClone(S.P);S.abort=false;S.flags.dump=S.flags.testMode=true;saveFlags();
   await withWake(async()=>{try{setPhase('dumping');S.prog={done:0,total:prof.flash.size,t0:performance.now(),start:0,win:0};
       S.dumpBuf=await READBACK.dumpRange(rctx(),0,prof.flash.size,d=>{S.prog.done=d;tick()});
       const c=await certify(S.dumpBuf,passport,prof,'ble-testmode');download('dump.bin',S.dumpBuf);download('dump.cert.json',c);setPhase('done')}
     catch(e){setPhase('error');toast('dump: '+e.message,'block')}})}
 async function spotCheck(){
-  if(!S.dumpBuf||!S.dumpCert||!READBACK.ready||S.conn!=='on'||ACTIVE.includes(S.phase))return;
-  S.flags.testMode=true;saveFlags();
-  await withWake(async()=>{try{setPhase('dumping');const c=await certify(S.dumpBuf,S.dumpCert.passport,S.profiles[S.P.profileId],'ble-testmode');download('dump.cert.json',c);setPhase('done')}
+  if(!S.dumpBuf||!S.dumpCert||dumpBlockers().length)return;
+  S.flags.testMode=true;saveFlags();S.abort=false;
+  await withWake(async()=>{try{setPhase('dumping');const c=await certify(S.dumpBuf,S.dumpCert.passport,S.profiles[S.P.profileId]||GENERIC4M,'ble-testmode');download('dump.cert.json',c);setPhase('done')}
     catch(e){setPhase('error');toast('spot-check: '+e.message,'block')}})}
 async function certifyWired(){
-  if(!S.R||S.R.kind!=='full-dump'||!S.P||!S.P.profileId||ACTIVE.includes(S.phase)||!confirm(t('wiredConfirm')))return;
-  try{download('dump.cert.json',await certify(new Uint8Array(S.buf),S.P,S.profiles[S.P.profileId],'wired-uboot'))}catch(e){toast('cert: '+e.message,'block')}}
+  if(!S.R||S.R.kind!=='full-dump'||!S.P||ACTIVE.includes(S.phase)||!confirm(t('wiredConfirm')))return;
+  try{download('dump.cert.json',await certify(new Uint8Array(S.buf),S.P,S.profiles[S.P.profileId]||GENERIC4M,'wired-uboot'))}catch(e){toast('cert: '+e.message,'block')}}
 
+// причины, по которым дамп недоступен — показываются под кнопками вместо «серой» без объяснений
+const dumpBlockers=()=>[S.conn!=='on'&&'h_conn',!(S.P&&S.P.auth.ok)&&'h_auth',!S.boot&&'h_boot',ACTIVE.includes(S.phase)&&'h_busy',!READBACK.ready&&'h_port'].filter(Boolean);
 function renderInt(){
   const r=S.int,c=S.dumpCert,on=S.conn==='on',act=ACTIVE.includes(S.phase),ready=on&&!act&&S.P&&S.P.profileId;
   const sv=x=>x===true?'pass':x===false?'block':'warn';
@@ -69,6 +71,7 @@ function renderInt(){
   $('#certPre').textContent=c?JSON.stringify({...stripCert(c),sigOk:c.sigOk,passport:c.passport&&{deviceId:c.passport.deviceId,name:c.passport.name,fwVersion:c.passport.fwVersion}},null,2):'—';
   $('#btnRb').disabled=!(ready&&S.l0&&S.R&&READBACK.ready);$('#btnRh').disabled=!(ready&&S.l0&&S.R);
   $('#btnAccept').hidden=!(r&&r.verdict==='partial'&&!r.acceptedPartial);$('#btnCopyDig').disabled=!r;
-  $('#btnDump').disabled=!(ready&&READBACK.ready);$('#btnSpot').disabled=!(ready&&READBACK.ready&&S.dumpBuf);
-  $('#btnCertWired').disabled=!(S.R&&S.R.kind==='full-dump'&&S.P&&S.P.profileId&&!act);
+  const db=dumpBlockers();$('#btnDump').disabled=!!db.length;$('#btnSpot').disabled=!!db.length||!S.dumpBuf;
+  $('#dumpHint').textContent=db.length?t('h_dump')+': '+db.map(t).join(', '):'';
+  $('#btnCertWired').disabled=!(S.R&&S.R.kind==='full-dump'&&S.P&&!act);
   $('#btnExpCert').disabled=!c;$('#btnExpInt').disabled=!r}
