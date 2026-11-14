@@ -25,7 +25,7 @@ const errs=[];const dom=new JSDOM(readFileSync(new URL('../dist-single/index.htm
     else if(cmd===0x29&&authed)send('fd01',q(0x27,[0,95]));
     else if(cmd===0xDC)send('fd03',q(0xFF,[0x29,0]));
     else if(cmd===0xA0&&authed){test=true;send('fd01',q(0xA0,[0]))}
-    else if(cmd===0xAA&&test){const a=p[0]|p[1]<<8|p[2]<<16|p[3]<<24,n=p[4]|p[5]<<8;w.SIM.reads++;const f=q(0xAA,Array.from({length:n},(_,i)=>(a+i)*7&255));send('fd01',f.slice(0,100));send('fd01',f.slice(100))}}
+    else if(cmd===0xAA&&test){const a=p[0]|p[1]<<8|p[2]<<16|p[3]<<24,n=p[4]|p[5]<<8;w.SIM.reads++;send('fd03',q(0xFF,[0xAA,0]));const f=q(0xAA,Array.from({length:n},(_,i)=>(a+i)*7&255));send('fd01',f.slice(0,100));send('fd01',f.slice(100))}}
   const server={getPrimaryServices:async()=>svcs.map(s=>({uuid:s.uuid,getCharacteristics:async()=>s.cs}))};
   const device={id:'SIM',name:'E87',gatt:{connected:false,connect:async()=>{device.gatt.connected=true;return server},disconnect(){device.gatt.connected=false}},addEventListener(){}};
   Object.defineProperty(w.navigator,'bluetooth',{value:{requestDevice:async()=>device}});
