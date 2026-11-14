@@ -6,7 +6,7 @@ Web Bluetooth SPA, fail-closed. ТЗ v1.0 + Дополнение №1 (цело�
 ## Быстрый старт
 - `dist-single/index.html` — один файл, открыть через `localhost` или HTTPS в Chrome/Edge/Brave/Opera (десктоп, Android).
 - `dist/` — PWA-сборка (manifest + service worker, офлайн), раздавать как статику.
-- Node ≥ 18, зависимостей нет: `node tests/run.mjs` (46 тестов), `node build.mjs` (сборка), `npm run check` (оба).
+- Node ≥ 18, зависимостей нет: `node tests/run.mjs` (50 тестов), `node build.mjs` (сборка), `npm run check` (оба).
 
 ## Структура
 ```
@@ -31,6 +31,12 @@ src/ui/*  src/state/*  src/util/*  src/main.js  src/pwa/*
 | `QIX.*` | `qix-ble` + `ROBUSTNESS.md` | begin, sendWindow→`{crcOk}`, resume (без 0xC0), apply→`{wholeFileCrcOk}`, probe, abort?, enterService? |
 | `READBACK.dumpRange` | `qix dump --type flash` | `(ctx, addr, len, onProgress) → Uint8Array`, ставит TEST_MODE |
 | `JL.*` | `jl-flash-decrypt` | decrypt, parseHeader, verifyCrcs, layoutOk |
+
+## Наблюдения HIL (E87, 2026-11-15)
+- GATT: сервис `C2E6FD00` есть, но характеристик только `FD01…FD05` (FD03 — read/write/notify), **FD00 нет** → профиль `e87-ac707n-rcsp`, READ-ONLY, Qix-OTA невозможен (R-CHIP/R-PATH = BLOCK).
+- 9E-кадр: `[3]=cmd`, `[4..5]=len LE`, payload с `[6]`; C7 (13 B, u16 BE) = `360×360`, `368×368`, `500`, `16`, `0` — смысл полей после 360×360 не подтверждён.
+- `2A19` read возвращает 0 байт → подписка на notify + повтор после bootstrap.
+- Непрошенные кадры: `cmd 0x21` (00 80 / 01 80), `cmd 0x27` (00 5F), FD03 `cmd 0xFF` (29 00, похоже на ack heartbeat 0x29) — не декодированы.
 
 ## Допущения — сверить на HIL
 - Год в кадре времени `9E 45…` — big-endian.

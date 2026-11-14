@@ -13,4 +13,6 @@ Object.assign(T,{ok_done:['Прошивка завершена','Flash complete'
   needPC:['После readback активен TEST_MODE: сделайте power-cycle перед следующей OTA','TEST_MODE after readback: power-cycle before the next OTA'],
   imgChanged:['Загружен другой образ — сверка невозможна','A different image is loaded — cannot verify'],
   i_chunk:['CRC16 чанков (аки окон)','Chunk CRC16 (window acks)'],i_whole:['CRC16 файла (completion 0x20/0x1C)','Whole-file CRC16 (completion 0x20/0x1C)'],
-  i_jl:['Внутренние CRC JL-образа','Internal JL image CRCs'],i_boot:['Boot-маркер / имя / версия','Boot marker / name / version'],i_rb:['Readback / HASH_RANGE','Readback / HASH_RANGE']});
+  i_jl:['Внутренние CRC JL-образа','Internal JL image CRCs'],i_boot:['Boot-маркер / имя / версия','Boot marker / name / version'],i_rb:['Readback / HASH_RANGE','Readback / HASH_RANGE'],
+  s_preAuth:['Expert: 0x03/0x07 без auth (только чтение)','Expert: 0x03/0x07 without auth (read-only)'],
+  e_reconn:['Переподключение не удалось: бейдж держит один слот или уснул. Выключите и включите питание, отключите BT телефона, при необходимости удалите сопряжение в ОС, затем «Подключить».','Reconnect failed: the badge holds a single slot or fell asleep. Power-cycle it, turn off phone BT, remove the OS pairing if needed, then Connect.']});

@@ -5,15 +5,23 @@ const hx=n=>n==null?'—':'0x'+n.toString(16).toUpperCase();
 const eq=(a,b)=>!!a&&!!b&&a.length===b.length&&a.every((x,i)=>x===b[i]);
 
 const PROFILES={
-  'e87-ac707n':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE']},family:'AC707N/BR35',ota:true,chipkey:0x9847,
+  'e87-ac707n':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE'],chars:['fd00']},family:'AC707N/BR35',ota:true,chipkey:0x9847,
     flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},ubootSha256Allowlist:[],knownGoodImages:[],expectedForm:null,verifySpan:[0,0xFC000]},
+  // HIL 2026-11-15: E87 с сервисом C2E6FD00, но без характеристики FD00 → Qix-OTA невозможен, только инспекция
+  'e87-ac707n-rcsp':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE'],charsAbsent:['fd00']},family:'AC707N/BR35',ota:false,chipkey:0x9847,
+    flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000}},
   'e87-ac697x':{match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC697x/BR30',ota:false},
   'e87-ac701n':{match:{sdkRegex:'jl_sdk_ac701',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC701N/BR28',ota:false}};
 const familyOf=s=>/ac707/.test(s||'')?'AC707N/BR35':/ac697/.test(s||'')?'AC697x/BR30':/ac701/.test(s||'')?'AC701N/BR28':'unknown';
 function matchProfile(P,profiles){
   for(const[id,p]of Object.entries(profiles)){const m=p.match;
-    if(P.sdkString&&new RegExp(m.sdkRegex).test(P.sdkString)&&m.gattServices.every(s=>P.gatt.services.some(u=>u.startsWith(s)||u.startsWith('0000'+s)))&&m.names.some(n=>(P.name||'').startsWith(n)))return id}
+    if(P.sdkString&&new RegExp(m.sdkRegex).test(P.sdkString)&&m.gattServices.every(s=>P.gatt.services.some(u=>u.startsWith(s)||u.startsWith('0000'+s)))&&m.names.some(n=>(P.name||'').startsWith(n))
+      &&(m.chars||[]).every(c=>(P.charIds||[]).includes(c))&&!(m.charsAbsent||[]).some(c=>(P.charIds||[]).includes(c)))return id}
   return null}
+// 9E-кадр: [0]=9E [1],[2]=? (меняются; seq/чексумма не подтверждены) [3]=cmd [4..5]=len LE [6..]=payload — сходится на всех TX/RX лога
+function parse9E(u){if(u[0]!==0x9E||u.length<6)return null;const len=u[4]|u[5]<<8;return{b1:u[1],b2:u[2],cmd:u[3],len,payload:u.slice(6,6+len),complete:u.length>=6+len}}
+// C7 (ответ на C6), 13 B, u16 BE. 360×360 совпадает с панелью из ТЗ; назначение w2/h2 (368) и f5..f7 не подтверждено
+function decodeC7(p){if(!p||p.length<13)return null;const b=o=>p[o]<<8|p[o+1];return{width:b(0),height:b(2),w2:b(4),h2:b(6),f5:b(8),f6:p[10],f7:b(11)}}
 const profileForSdk=(sdk,profiles)=>sdk?Object.keys(profiles).find(id=>new RegExp(profiles[id].match.sdkRegex).test(sdk))||null:null;
 // >0 upgrade, 0 same, <0 downgrade, null = unknown / different line
 function vcmp(a,b){if(!a||!b)return null;const x=a.split('.').map(Number),y=b.split('.').map(Number);if(x[0]!==y[0]||x[1]!==y[1])return null;
@@ -79,6 +87,12 @@ function selfTest(){
   const out=[],ok=(n,v)=>out.push({n,ok:!!v});
   ok('CRC-16/XMODEM "123456789" = 0x31C3',crc16(new TextEncoder().encode('123456789'))===0x31C3);
   let f=fixture();ok('rules: reference → ALLOW',evaluate(f.P,f.R,f.c).overall==='ALLOW');
+  const c7=parse9E(fromHex('9E 8D 00 C7 0D 00 01 68 01 68 01 70 01 70 01 F4 10 00 00')),d7=c7&&decodeC7(c7.payload);
+  ok('9E/C7 frame from E87 log → 360×360, 368×368, 500, 16',!!d7&&c7.cmd===0xC7&&c7.len===13&&c7.complete&&d7.width===360&&d7.height===360&&d7.w2===368&&d7.h2===368&&d7.f5===500&&d7.f6===16);
+  ok('9E: TX time frame parses (len 7)',parse9E(fromHex('9E 45 08 02 07 00 07 EA 0B 0F 00 01 23')).len===7);
+  const mp=ids=>matchProfile({sdkString:'jl_sdk_ac707_publish',name:'E87',gatt:{services:['0000ae00-0000-1000-8000-00805f9b34fb','c2e6fd00-e966-1000-8000-bef9c223df6a']},charIds:ids},PROFILES);
+  ok('profile: AC707N without FD00 char → e87-ac707n-rcsp (READ-ONLY)',mp(['ae01','ae02','fd01','fd02','fd03','fd04','fd05'])==='e87-ac707n-rcsp');
+  ok('profile: AC707N with FD00 char → e87-ac707n',mp(['ae01','ae02','fd00','fd01'])==='e87-ac707n');
   const sevOf=(f,id)=>evaluate(f.P,f.R,f.c).rules.find(r=>r.id===id).severity;
   f=fixture();f.R.internalJlCrcOk=null;ok('R-CRC: internal JL CRC unknown → BLOCK',sevOf(f,'R-CRC')==='block');
   f=fixture();f.c.profiles={...PROFILES,'e87-ac707n':{...PROFILES['e87-ac707n'],expectedForm:'on-flash'}};f.R.slices.plain=null;

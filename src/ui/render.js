@@ -10,6 +10,7 @@ function render(){
   $('#hdrName').textContent=(P&&P.name)||(S.dev&&S.dev.name)||'—';$('#hdrBatt').textContent=P&&P.battery.level!=null?`🔋${P.battery.level}%`:'';
   $('#btnConn').textContent=on?t('disc'):t('conn');$('#btnConnAll').hidden=on;
   kv('#passKv',P&&{name:P.name,deviceId:P.deviceId,chipFamily:P.chipFamily,sdkString:P.sdkString,fwVersion:P.fwVersion,productName:P.productName,
+    display:P.display&&`${P.display.width}×${P.display.height} · ${P.display.w2}×${P.display.h2} · f5=${P.display.f5} f6=${P.display.f6} f7=${P.display.f7}`,variant:P.variant,
     battery:`${P.battery.level??'—'}% charging=${P.battery.charging}`,auth:P.auth.ok?'ok, profile '+P.auth.keyProfile:'—',profileId:P.profileId||'— (OTA BLOCK)',
     capabilities:Object.entries(P.capabilities).filter(x=>x[1]).map(x=>x[0]).join(', ')||'—',testModeSuspected:P.testModeSuspected,capturedAt:P.capturedAt},t('noDev'));
   $('#gattPre').textContent=S.gatt?Object.entries(S.gatt.chars).map(([s,c])=>s+'\n  '+c.join('\n  ')).join('\n'):'—';

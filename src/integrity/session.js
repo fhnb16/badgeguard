@@ -17,7 +17,7 @@ async function runVerify(mode){ // 'auto' | 'L1' | 'L2'
       setPhase('verifying-readback');S.flags.testMode=true;saveFlags(); // readback = TEST_MODE → R-TEST до power-cycle
       S.prog={done:0,total:l,t0:performance.now(),start:0,win:0};
       const rb=await READBACK.dumpRange(rctx(),a,l,d=>{S.prog.done=d;tick()});toast(t('needPC'),'warn');return rb},
-    sha:sha256hex,onCalibrate:f=>{prof.expectedForm=f;SV('profiles',S.profiles);log('EV','',null,'form calibrated → '+f)}});
+    sha:sha256hex,onCalibrate:f=>{prof.expectedForm=f;SV('profiles.v2',S.profiles);log('EV','',null,'form calibrated → '+f)}});
   S.int={...rep,acceptedPartial:false};log('EV','',null,`integrity ${rep.level} ${rep.verdict} ${rep.errors.join(', ')}`);
   idb('sessions',{integrity:S.int});render();return S.int}
 async function reverify(mode){

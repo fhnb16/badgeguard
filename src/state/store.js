@@ -1,8 +1,8 @@
 /* ===== state ===== */
-const DEF={connectTo:15000,reqTo:3000,winTo:5000,chunk:490,win:8,retries:3,expert:false,chime:false,theme:'dark',lang:'ru',readbackOffer:true,spotN:16,verifySpan:'0x0:0xFC000',hashTo:30000};
+const DEF={connectTo:15000,reqTo:3000,winTo:5000,chunk:490,win:8,retries:3,expert:false,chime:false,theme:'dark',lang:'ru',readbackOffer:true,spotN:16,verifySpan:'0x0:0xFC000',hashTo:30000,rcspPreAuth:false};
 const LS=(k,d)=>{try{return JSON.parse(localStorage.getItem('bg.'+k))??d}catch{return d}};
 const SV=(k,v)=>{try{localStorage.setItem('bg.'+k,JSON.stringify(v))}catch{}};
-const S={set:{...DEF,...LS('set',{})},allow:LS('allow',{uboot:[],image:[]}),flags:LS('flags',{testMode:false,dump:false,probe:false}),profiles:LS('profiles',null)||structuredClone(PROFILES),
+const S={set:{...DEF,...LS('set',{})},allow:LS('allow',{uboot:[],image:[]}),flags:LS('flags',{testMode:false,dump:false,probe:false}),profiles:LS('profiles.v2',null)||structuredClone(PROFILES),
   dev:null,chars:{},gatt:null,gattReady:false,conn:'off',P:null,R:null,buf:null,dumpPass:null,V:null,path:'qix',phase:'idle',log:[],waiters:[],ac:null,wake:null,
   prog:{done:0,total:0,t0:0,start:0,win:0},abort:false,locked:false,userDisc:false,reconnecting:false,report:null,dumpCert:null,dumpBuf:null,img:null,l0:null,int:null,asyncTests:null,chunkCrc:{ok:0,fail:0}};
 const ACTIVE=['preflight','armed','transferring','paused','resuming','applying','rebooting','verifying-marker','verifying-hash','verifying-readback','dumping'];

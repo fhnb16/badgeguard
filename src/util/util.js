@@ -30,5 +30,6 @@ function appendLog(e){if(!S.set.expert&&e.dir!=='EV'&&!e.note)return;const li=do
 const rebuildLog=()=>{$('#log').textContent='';S.log.slice(-1500).forEach(appendLog)};
 const logText=()=>S.log.map(e=>`${e.ts} ${e.dir} ${e.ch} ${e.hex} ${e.note}`).join('\n');
 function decode(k,u){if(u[0]===0xFE&&u[1]===0xDC&&u[2]===0xBA)return`FE flag=${hx(u[3])} cmd=${hx(u[4])} len=${(u[5]<<8)|u[6]}`;
-  if(u[0]===0x9E){const a=ascii(u.slice(4)).trim();return`9E ${hex(u.slice(1,4))}${a.length>2?' "'+a.replace(/\n/g,' ')+'"':''}`}
+  const f=parse9E(u);if(f){const c=f.cmd===0xC7?decodeC7(f.payload):null,a=ascii(f.payload).trim();
+    return`9E cmd=${hx(f.cmd)} len=${f.len}${f.complete?'':' (partial)'}${c?' '+JSON.stringify(c):a.length>=4?' "'+a.replace(/\n/g,' ')+'"':''}`}
   if(k==='ae02'&&u.length<=17)return'auth';return''}
