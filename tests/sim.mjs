@@ -6,7 +6,7 @@ const errs=[];const dom=new JSDOM(readFileSync(new URL('../dist-single/index.htm
   w.TextEncoder=TextEncoder;w.TextDecoder=TextDecoder;w.structuredClone=structuredClone;w.confirm=()=>true;w.URL.createObjectURL=()=>'blob:x';w.URL.revokeObjectURL=()=>{};
   w.addEventListener('error',e=>errs.push(e.message));
   const U=s=>s.length===4?`0000${s}-0000-1000-8000-00805f9b34fb`:s, Q=n=>`c2e6${n}-e966-1000-8000-bef9c223df6a`;
-  const chars={},mk=(uuid,props)=>{const L=[];return chars[uuid.slice(4,8)]={uuid,properties:props,L,startNotifications:async()=>{},addEventListener:(t,f)=>L.push(f),
+  const chars={},mk=(uuid,props)=>{const L=[];return chars[uuid.slice(4,8)]={uuid,properties:props,L,startNotifications:async()=>{},stopNotifications:async()=>{},addEventListener:(t,f)=>L.push(f),removeEventListener:(t,f)=>{const i=L.indexOf(f);if(i>=0)L.splice(i,1)},
     readValue:async()=>new DataView(new ArrayBuffer(0)),writeValueWithoutResponse:async u=>dev(uuid.slice(4,8),new Uint8Array(u)),writeValueWithResponse:async u=>dev(uuid.slice(4,8),new Uint8Array(u))}};
   const svcs=[{uuid:Q('fd00'),cs:[mk(Q('fd01'),{notify:true}),mk(Q('fd02'),{write:true,writeWithoutResponse:true}),mk(Q('fd03'),{read:true,write:true,notify:true}),mk(Q('fd04'),{writeWithoutResponse:true}),mk(Q('fd05'),{notify:true})]},
     {uuid:U('180f'),cs:[mk(U('2a19'),{read:true,notify:true})]},{uuid:U('ae00'),cs:[mk(U('ae01'),{writeWithoutResponse:true}),mk(U('ae02'),{notify:true})]}];

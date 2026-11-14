@@ -17,15 +17,16 @@ const waitFor=(pred,ms)=>new Promise((res,rej)=>{const wt={pred,res:x=>{clearTim
 async function req(k,b,pred,note,ms=S.set.reqTo){const p=waitFor(pred,ms);p.catch(()=>{});await w(k,b,note);return p}
 // Qix-команда: 9E-кадр с контрольной суммой в FD02; ответ — собранный кадр с FD01/FD03
 const qix=(flags,cmd,payload=[],note)=>w('fd02',qixEncode(flags,cmd,payload),note||'Qix '+hx(cmd));
-async function qreq(cmd,payload,ms,{flags=0,expect=cmd}={}){
-  const p=waitFor((k,u)=>(k==='fd01'||k==='fd03')&&u[0]===0x9E&&(expect==null||u[3]===expect),ms);p.catch(()=>{});
+async function qreq(cmd,payload,ms,{flags=0,expect=cmd,match=null}={}){
+  const p=waitFor((k,u)=>(k==='fd01'||k==='fd03'||k==='fd05')&&u[0]===0x9E&&(match?match(u):expect==null||u[3]===expect),ms);p.catch(()=>{});
   await qix(flags,cmd,payload);const r=await p;return{k:r.k,cmd:r.u[3],payload:r.u.slice(6)}}
 
 // уведомления фрагментируются: собираем 9E-кадры (FD01/FD03) и FE-кадры (AE02) из потока
 const rxBuf={};
 const cat=(a,b)=>{if(!a||!a.length)return b;const o=new Uint8Array(a.length+b.length);o.set(a);o.set(b,a.length);return o};
 function onRx(e){const v=e.target.value,u=new Uint8Array(v.buffer.slice(v.byteOffset,v.byteOffset+v.byteLength)),k=short(e.target.uuid);
-  const take=k==='fd01'||k==='fd03'?qixTake:k==='ae02'&&(u[0]===0xFE||rxBuf.ae02&&rxBuf.ae02.length)?feTake:null;
+  S.maxNotify[k]=Math.max(S.maxNotify[k]||0,u.length); // косвенная оценка MTU: Web Bluetooth её не отдаёт
+  const take=k==='fd01'||k==='fd03'||k==='fd05'?qixTake:k==='ae02'&&(u[0]===0xFE||rxBuf.ae02&&rxBuf.ae02.length)?feTake:null;
   if(!take)return dispatch(k,u);
   let b=cat(rxBuf[k],u);for(;;){const r=take(b);b=r.rest;if(r.skipped)log('EV',k,null,`skipped ${r.skipped} B`);if(!r.frame)break;dispatch(k,r.frame)}rxBuf[k]=b}
 function dispatch(k,u){log('RX',k,u,decode(k,u));sniff(u);onFrame(k,u);
@@ -58,7 +59,7 @@ async function gattUp(){
     const cs=await gq(()=>s.getCharacteristics()).catch(()=>[]);
     g.chars[s.uuid]=cs.map(c=>`${c.uuid} [${['read','write','writeWithoutResponse','notify','indicate'].filter(p=>c.properties[p]).join(',')}]`);
     for(const c of cs)chars[short(c.uuid)]??=c}
-  S.chars=chars;S.gatt=g;for(const k in rxBuf)delete rxBuf[k];S.boot=false;
+  S.chars=chars;S.gatt=g;S.dumpCs=0;for(const k in rxBuf)delete rxBuf[k];S.boot=false;
   for(const k of NOTIFY){const c=chars[k];if(!c||!(c.properties.notify||c.properties.indicate))continue;
     try{await gq(()=>c.startNotifications());c.addEventListener('characteristicvaluechanged',onRx,{signal:S.ac.signal})}catch(e){log('EV',k,null,'notify ✕ '+e.message)}}
   S.gattReady=true;log('EV','',null,`GATT ↑ ${g.services.length} services`);setConn('on')}

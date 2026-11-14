@@ -793,7 +793,7 @@ const LS=(k,d)=>{try{return JSON.parse(localStorage.getItem('bg.'+k))??d}catch{r
 const SV=(k,v)=>{try{localStorage.setItem('bg.'+k,JSON.stringify(v))}catch{}};
 const S={set:{...DEF,...LS('set',{})},allow:LS('allow',{uboot:[],image:[]}),flags:LS('flags',{testMode:false,dump:false,probe:false}),profiles:LS('profiles.v3',null)||structuredClone(PROFILES),
   dev:null,chars:{},gatt:null,gattReady:false,conn:'off',P:null,R:null,buf:null,dumpPass:null,V:null,path:'qix',phase:'idle',log:[],waiters:[],ac:null,wake:null,
-  prog:{done:0,total:0,t0:0,start:0,win:0},abort:false,locked:false,userDisc:false,reconnecting:false,report:null,dumpCert:null,dumpBuf:null,img:null,l0:null,int:null,asyncTests:null,chunkCrc:{ok:0,fail:0},boot:false,quiet:false,battAt:0};
+  prog:{done:0,total:0,t0:0,start:0,win:0},abort:false,locked:false,userDisc:false,reconnecting:false,report:null,dumpCert:null,dumpBuf:null,img:null,l0:null,int:null,asyncTests:null,chunkCrc:{ok:0,fail:0},boot:false,quiet:false,battAt:0,maxNotify:{}};
 const ACTIVE=['preflight','armed','transferring','paused','resuming','applying','rebooting','verifying-marker','verifying-hash','verifying-readback','dumping'];
 const ABORTABLE=['preflight','armed','transferring','paused','resuming','dumping','verifying-readback'];
 
@@ -821,7 +821,7 @@ const idbPut=(s,k,v)=>idbDo(s,'readwrite',st=>st.put(v,k));
 function chime(){if(!S.set.chime)return;try{const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=880;g.gain.value=.04;o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.15);o.onended=()=>a.close()}catch{}}
 
 /* ===== log ===== */
-function log(dir,ch,u8,note=''){if(S.quiet&&dir!=='EV')return;const e={ts:new Date().toISOString(),dir,ch,hex:u8?hex(u8):'',note};S.log.push(e);
+function log(dir,ch,u8,note=''){if(S.quiet&&dir!=='EV'&&/0xAA|test_get_flash/.test(note))return;const e={ts:new Date().toISOString(),dir,ch,hex:u8?hex(u8):'',note};S.log.push(e);
   if(S.log.length>50000)S.log.splice(0,10000); // shortcut: кольцевой буфер; полный лог сессии — в IndexedDB по завершении прошивки
   appendLog(e)}
 function appendLog(e){if(!S.set.expert&&e.dir!=='EV'&&!e.note)return;const li=document.createElement('li');li.className=e.dir.toLowerCase();
@@ -855,15 +855,16 @@ const waitFor=(pred,ms)=>new Promise((res,rej)=>{const wt={pred,res:x=>{clearTim
 async function req(k,b,pred,note,ms=S.set.reqTo){const p=waitFor(pred,ms);p.catch(()=>{});await w(k,b,note);return p}
 // Qix-команда: 9E-кадр с контрольной суммой в FD02; ответ — собранный кадр с FD01/FD03
 const qix=(flags,cmd,payload=[],note)=>w('fd02',qixEncode(flags,cmd,payload),note||'Qix '+hx(cmd));
-async function qreq(cmd,payload,ms,{flags=0,expect=cmd}={}){
-  const p=waitFor((k,u)=>(k==='fd01'||k==='fd03')&&u[0]===0x9E&&(expect==null||u[3]===expect),ms);p.catch(()=>{});
+async function qreq(cmd,payload,ms,{flags=0,expect=cmd,match=null}={}){
+  const p=waitFor((k,u)=>(k==='fd01'||k==='fd03'||k==='fd05')&&u[0]===0x9E&&(match?match(u):expect==null||u[3]===expect),ms);p.catch(()=>{});
   await qix(flags,cmd,payload);const r=await p;return{k:r.k,cmd:r.u[3],payload:r.u.slice(6)}}
 
 // уведомления фрагментируются: собираем 9E-кадры (FD01/FD03) и FE-кадры (AE02) из потока
 const rxBuf={};
 const cat=(a,b)=>{if(!a||!a.length)return b;const o=new Uint8Array(a.length+b.length);o.set(a);o.set(b,a.length);return o};
 function onRx(e){const v=e.target.value,u=new Uint8Array(v.buffer.slice(v.byteOffset,v.byteOffset+v.byteLength)),k=short(e.target.uuid);
-  const take=k==='fd01'||k==='fd03'?qixTake:k==='ae02'&&(u[0]===0xFE||rxBuf.ae02&&rxBuf.ae02.length)?feTake:null;
+  S.maxNotify[k]=Math.max(S.maxNotify[k]||0,u.length); // косвенная оценка MTU: Web Bluetooth её не отдаёт
+  const take=k==='fd01'||k==='fd03'||k==='fd05'?qixTake:k==='ae02'&&(u[0]===0xFE||rxBuf.ae02&&rxBuf.ae02.length)?feTake:null;
   if(!take)return dispatch(k,u);
   let b=cat(rxBuf[k],u);for(;;){const r=take(b);b=r.rest;if(r.skipped)log('EV',k,null,`skipped ${r.skipped} B`);if(!r.frame)break;dispatch(k,r.frame)}rxBuf[k]=b}
 function dispatch(k,u){log('RX',k,u,decode(k,u));sniff(u);onFrame(k,u);
@@ -896,7 +897,7 @@ async function gattUp(){
     const cs=await gq(()=>s.getCharacteristics()).catch(()=>[]);
     g.chars[s.uuid]=cs.map(c=>`${c.uuid} [${['read','write','writeWithoutResponse','notify','indicate'].filter(p=>c.properties[p]).join(',')}]`);
     for(const c of cs)chars[short(c.uuid)]??=c}
-  S.chars=chars;S.gatt=g;for(const k in rxBuf)delete rxBuf[k];S.boot=false;
+  S.chars=chars;S.gatt=g;S.dumpCs=0;for(const k in rxBuf)delete rxBuf[k];S.boot=false;
   for(const k of NOTIFY){const c=chars[k];if(!c||!(c.properties.notify||c.properties.indicate))continue;
     try{await gq(()=>c.startNotifications());c.addEventListener('characteristicvaluechanged',onRx,{signal:S.ac.signal})}catch(e){log('EV',k,null,'notify ✕ '+e.message)}}
   S.gattReady=true;log('EV','',null,`GATT ↑ ${g.services.length} services`);setConn('on')}
@@ -919,23 +920,39 @@ async function readBatt(){
   return null}
 
 /* ---- src/protocol/testmode.js ---- */
-/* ===== protocol/testmode: BLE-дамп флеша — порт qix-ble cli.py cmd_dump =====
+/* ===== protocol/testmode: BLE-дамп флеша — порт qix-ble cli.py cmd_dump + диагностика =====
  * После auth + bootstrap: Qix 0xA0 [01] SET_TEST_MODE → 0xAA TEST_GET_FLASH <addr LE32><len LE32> → ответ 0xAA с байтами → 0xA6 TEST_CLOSE.
- * Включает TEST_MODE: до power-cycle бейдж молча отвергает REQ_UPDATE (R-TEST). */
+ * ElectronicCats помечают BLE-вектор как «to be validated» и снимают дамп проводом (UBOOT) — поэтому сначала проба:
+ * размеры [chunk,128,64,16] (вдруг ответ не влезает в MTU), таймаут 10 с как в qix-ble, ack 0xFF [AA,status] = отказ,
+ * и временная подписка на FD05 (канал «тяжёлых» передач; TEST_MODE и так требует power-cycle перед OTA). */
 const le32=n=>[n&255,n>>>8&255,n>>>16&255,n>>>24&255];
+const isAA=(u,n)=>u[3]===0xAA||u[3]===0xFF&&u[6]===0xAA;
 READBACK.ready=true;
 READBACK.dumpRange=async(ctx,addr,len,onProgress)=>{
   if(!S.P||!S.P.auth.ok||!S.boot)throw new Error('E-DUMP-002 нужны auth + bootstrap');
-  const out=new Uint8Array(len),cs=Math.max(16,Math.min(1024,S.set.dumpChunk|0||256)),tmo=Math.max(2000,S.set.reqTo);
-  S.flags.testMode=S.flags.dump=true;saveFlags(); // флаг ставим до 0xA0: даже без ответа бейдж может уже быть в TEST_MODE
-  await qreq(0xA0,[0x01],tmo,{expect:null});log('EV','',null,`TEST_MODE on, dump ${hx(addr)}+${hx(len)} chunk ${cs}`);
-  S.quiet=true; // 16k кадров на 4 МБ — в журнал только прогресс
-  try{for(let off=0;off<len;){if(S.abort)throw new Error('E-ABORT');const n=Math.min(cs,len-off);let r;
-      for(let tries=0;;tries++){try{r=await qreq(0xAA,[...le32(addr+off),...le32(n)],tmo);if(r.payload.length!==n)throw new Error(`short ${r.payload.length}/${n}`);break}
-        catch(e){if(S.abort||!S.gattReady||tries>=S.set.retries)throw new Error(`E-DUMP-001 @${hx(addr+off)}: ${e.message}`);await sleep(150*2**tries)}}
-      out.set(r.payload,off);off+=n;if(onProgress)onProgress(off);if(off%0x40000===0){S.quiet=false;log('EV','',null,`dump ${hx(off)}/${hx(len)}`);S.quiet=true}}}
-  finally{S.quiet=false;await qix(0x00,0xA6,[],'TEST_CLOSE').catch(()=>{})}
-  return out};
+  const tmo=Math.max(10000,S.set.reqTo),fd05=S.chars.fd05;let sub5=false;
+  const get=async(off,n)=>{const r=await qreq(0xAA,[...le32(addr+off),...le32(n)],tmo,{match:isAA});
+    if(r.cmd===0xFF)throw new Error(`E-DUMP-003 0xAA отклонён: ack status ${hx(r.payload[1])}`);
+    if(r.payload.length!==n)throw new Error(`short ${r.payload.length}/${n}`);return r.payload};
+  S.flags.testMode=S.flags.dump=true;saveFlags(); // ставим до 0xA0: даже без ответа бейдж может уже быть в TEST_MODE
+  try{
+    if(fd05&&(fd05.properties.notify||fd05.properties.indicate))try{await gq(()=>fd05.startNotifications());fd05.addEventListener('characteristicvaluechanged',onRx,{signal:S.ac.signal});sub5=true}catch{}
+    await qreq(0xA0,[0x01],tmo,{expect:null});await sleep(300);
+    const max=Math.max(16,Math.min(1024,S.set.dumpChunk|0||256));let cs=0,first=null,lastErr='';
+    for(const n of S.dumpCs?[S.dumpCs]:[...new Set([max,128,64,16])].filter(x=>x<=max)){ // рабочий размер кэшируется на соединение (spot-check не пробует заново)if(S.abort)throw new Error('E-ABORT');
+      log('EV','',null,`probe TEST_GET_FLASH ${n} B, timeout ${tmo/1000} s`);
+      try{first=await get(0,Math.min(n,len));cs=n;break}catch(e){lastErr=e.message;log('EV','',null,`probe ${n} B ✕ ${e.message}`);if(e.message.startsWith('E-DUMP-003'))throw e}}
+    if(!cs)throw new Error(`E-DUMP-003 TEST_GET_FLASH не отвечает (16–${max} B, FD01/FD03${sub5?'/FD05':''}; max notify ${JSON.stringify(S.maxNotify)}): ${lastErr}`);
+    S.dumpCs=cs;log('EV','',null,`TEST_GET_FLASH ✓ chunk ${cs} B; dump ${hx(addr)}+${hx(len)}`);
+    const out=new Uint8Array(len);out.set(first);let off=first.length;if(onProgress)onProgress(off);
+    S.quiet=true; // в журнал не пишем тысячи кадров 0xAA; прочие кадры видны
+    for(;off<len;){if(S.abort)throw new Error('E-ABORT');const n=Math.min(cs,len-off);let r;
+      for(let tries=0;;tries++){try{r=await get(off,n);break}
+        catch(e){if(S.abort||!S.gattReady||tries>=S.set.retries||e.message.startsWith('E-DUMP-003'))throw new Error(`E-DUMP-001 @${hx(addr+off)}: ${e.message}`);await sleep(150*2**tries)}}
+      out.set(r,off);off+=n;if(onProgress)onProgress(off);if(off%0x40000===0)log('EV','',null,`dump ${hx(off)}/${hx(len)}`)}
+    return out}
+  finally{S.quiet=false;await qix(0x00,0xA6,[],'TEST_CLOSE').catch(()=>{});
+    if(sub5){fd05.removeEventListener('characteristicvaluechanged',onRx);await gq(()=>fd05.stopNotifications()).catch(()=>{})}}};
 
 /* ---- src/protocol/auth.js ---- */
 /* ===== auth: 6-шаговый handshake JieLi на AE01/AE02 (порт qix-ble auth.py, сверен с btsnoop) ===== */
@@ -992,7 +1009,7 @@ async function collectMeta(){
   if(S.P.battery.level==null)await step('battery',async()=>{
     await waitFor((k,u)=>k==='fd01'&&u[3]===0x27,1500).catch(()=>{});if(S.P.battery.level==null)S.P.battery.level=await readBatt()},true);
   S.P.chipFamily=familyOf(S.P.sdkString);S.P.profileId=matchProfile(S.P,S.profiles);
-  S.P.variant=S.P.capabilities.qixFd00?'Qix FD01–FD03 + RCSP AE00':'RCSP AE00 only';S.P.capturedAt=new Date().toISOString();
+  S.P.variant=S.P.capabilities.qixFd00?'Qix FD01–FD03 + RCSP AE00':'RCSP AE00 only';S.P.maxNotify={...S.maxNotify};S.P.capturedAt=new Date().toISOString();
   log('EV','',null,`passport ${Date.now()-t0} ms, auth=${S.P.auth.ok} boot=${S.boot} profile=${S.P.profileId}`);idb('passports',S.P);toast(t('meta'),S.P.profileId?'ok':'warn');render()}
 
 /* ---- src/image/image.js ---- */

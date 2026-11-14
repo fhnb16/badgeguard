@@ -21,7 +21,7 @@ const idbPut=(s,k,v)=>idbDo(s,'readwrite',st=>st.put(v,k));
 function chime(){if(!S.set.chime)return;try{const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=880;g.gain.value=.04;o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.15);o.onended=()=>a.close()}catch{}}
 
 /* ===== log ===== */
-function log(dir,ch,u8,note=''){if(S.quiet&&dir!=='EV')return;const e={ts:new Date().toISOString(),dir,ch,hex:u8?hex(u8):'',note};S.log.push(e);
+function log(dir,ch,u8,note=''){if(S.quiet&&dir!=='EV'&&/0xAA|test_get_flash/.test(note))return;const e={ts:new Date().toISOString(),dir,ch,hex:u8?hex(u8):'',note};S.log.push(e);
   if(S.log.length>50000)S.log.splice(0,10000); // shortcut: кольцевой буфер; полный лог сессии — в IndexedDB по завершении прошивки
   appendLog(e)}
 function appendLog(e){if(!S.set.expert&&e.dir!=='EV'&&!e.note)return;const li=document.createElement('li');li.className=e.dir.toLowerCase();

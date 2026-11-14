@@ -34,5 +34,5 @@ async function collectMeta(){
   if(S.P.battery.level==null)await step('battery',async()=>{
     await waitFor((k,u)=>k==='fd01'&&u[3]===0x27,1500).catch(()=>{});if(S.P.battery.level==null)S.P.battery.level=await readBatt()},true);
   S.P.chipFamily=familyOf(S.P.sdkString);S.P.profileId=matchProfile(S.P,S.profiles);
-  S.P.variant=S.P.capabilities.qixFd00?'Qix FD01–FD03 + RCSP AE00':'RCSP AE00 only';S.P.capturedAt=new Date().toISOString();
+  S.P.variant=S.P.capabilities.qixFd00?'Qix FD01–FD03 + RCSP AE00':'RCSP AE00 only';S.P.maxNotify={...S.maxNotify};S.P.capturedAt=new Date().toISOString();
   log('EV','',null,`passport ${Date.now()-t0} ms, auth=${S.P.auth.ok} boot=${S.boot} profile=${S.P.profileId}`);idb('passports',S.P);toast(t('meta'),S.P.profileId?'ok':'warn');render()}
