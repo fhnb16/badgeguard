@@ -34,10 +34,13 @@ function feTake(b){if(b.length<7)return{frame:null,rest:b};if(!(b[0]===0xFE&&b[1
 const parseRcspResp=u=>{const len=u[5]<<8|u[6],body=u.subarray(7,7+len);return body.length<2?null:{flag:u[3],cmd:u[4],status:body[0],sn:body[1],data:body.subarray(2)}};
 const parseTlv=p=>{const out=[];for(let i=0;i<p.length;){const n=p[i];if(n<1||i+1+n>p.length)break;out.push({type:p[i+1],data:p.slice(i+2,i+1+n)});i+=1+n}return out};
 const TI_NAMES={0:'protocol_version',1:'power_up_sys_info',2:'edr_addr',3:'platform',4:'function_info',5:'firmware_info',6:'sdk_type',7:'uboot_version',8:'support_double_backup',
-  9:'mandatory_upgrade_flag',10:'vid_pid',11:'auth_key',12:'project_code',13:'fw_version',14:'allow_connect',16:'name',17:'connect_ble_only',31:'custom_ver'};
-function decodeTargetInfo(attrs){const o={};for(const{type,data}of attrs){const n=TI_NAMES[type]||'attr_'+type,txt=data.every(b=>b>=32&&b<127)&&data.length?String.fromCharCode(...data):null;
-  o[n]=type===2&&data.length===6?hex(data,':').toLowerCase():type===10&&data.length>=4?`vid=${hx(data[0]<<8|data[1])} pid=${hx(data[2]<<8|data[3])}`:
-    type===13&&data.length>=4?Array.from(data.subarray(0,4)).join('.'):txt||hex(data,'')}return o} // fw_version: трактовка 4 байт неоднозначна (qix-ble sysinfo.py)
+  9:'mandatory_upgrade_flag',10:'vid_pid',11:'auth_key',12:'project_code',13:'fw_version',14:'allow_connect',16:'name',17:'ble_addr',18:'peripherals_support',19:'dev_support_func',21:'file_transfer',31:'custom_ver'};
+const mac6=d=>hex(d.subarray(0,6),':').toLowerCase(); // порядок байт как в кадре; сверить с адресом в ОС
+// HIL E87: attr 2 = 8 Б (адрес + 2 Б), attr 17 = 7 Б (тип + адрес; qix-ble зовёт его connect_ble_only)
+function decodeTargetInfo(attrs){const o={};for(const{type,data}of attrs){const n=TI_NAMES[type]||'attr_'+type,txt=data.length>=3&&data.every(b=>b>=32&&b<127)?String.fromCharCode(...data):null;
+  o[n]=type===2&&data.length>=6?mac6(data)+(data.length>6?' +'+hex(data.subarray(6),''):''):type===17&&data.length===7?`type ${data[0]} ${mac6(data.subarray(1))}`:
+    type===10&&data.length>=4?`vid=${hx(data[0]<<8|data[1])} pid=${hx(data[2]<<8|data[3])}`:type===11?`${data.length} B (скрыт)`: // ключ устройства в паспорт не пишем
+    type===13&&data.length>=4?Array.from(data.subarray(0,4)).join('.'):data.length===1?String(data[0]):txt||hex(data,'')}return o} // fw_version: трактовка 4 Б неоднозначна (qix-ble)
 const GENERIC4M={family:'unknown',flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000}};
 // C7 (ответ на C6), 13 B, u16 BE. 360×360 совпадает с панелью из ТЗ; назначение w2/h2 (368) и f5..f7 не подтверждено
 function decodeC7(p){if(!p||p.length<13)return null;const b=o=>p[o]<<8|p[o+1];return{width:b(0),height:b(2),w2:b(4),h2:b(6),f5:b(8),f6:p[10],f7:b(11)}}
@@ -117,6 +120,8 @@ function selfTest(){
   ok('feTake: fragmented RCSP frame (btsnoop GetTargetInfo)',!f1.frame&&!!f2.frame&&eq(f2.frame,ti));
   const tlv=decodeTargetInfo(parseTlv(Uint8Array.of(5,16,116,101,115,116,7,2,0x12,0x34,0x56,0x78,0x9a,0xbc,5,10,0x05,0xb9,0xab,0xcd,5,13,1,16,2,28)));
   ok('target_info TLV: name / MAC / vid_pid / fw',tlv.name==='test'&&tlv.edr_addr==='12:34:56:78:9a:bc'&&tlv.vid_pid==='vid=0x5B9 pid=0xABCD'&&tlv.fw_version==='1.16.2.28');
+  const real=parseRcspResp(fromHex('FE DC BA 00 03 00 7D 00 01 02 00 20 05 01 00 00 00 00 09 02 46 88 00 02 09 DC 0E 00 07 04 00 00 00 04 00 00 03 05 00 01 02 06 0D 03 07 31 30 05 08 00 01 01 00 04 09 00 00 00 05 0A 00 02 00 8B 11 0B 68 45 39 79 66 73 65 58 36 55 64 4B 37 72 46 68 15 0C 6A 6C 5F 73 64 6B 5F 61 63 36 39 37 5F 70 75 62 6C 69 73 68 05 0D 01 10 02 1C 08 11 00 46 88 00 02 09 DC 02 12 00 03 13 04 04 05 15 00 00 00 07 EF')),rt=real&&decodeTargetInfo(parseTlv(real.data));
+  ok('target_info from real E87: ac697 / 1.16.2.28 / MAC / auth_key hidden',!!rt&&real.status===0&&rt.project_code==='jl_sdk_ac697_publish'&&rt.fw_version==='1.16.2.28'&&rt.edr_addr.startsWith('46:88:00:02:09:dc')&&rt.ble_addr==='type 0 46:88:00:02:09:dc'&&!/hE9y/.test(JSON.stringify(rt))&&rt.protocol_version==='32');
   if(typeof functionE1test==='function'){const K=fromHex('06775F87918DD423005DF1D8CF0C142B'),M=fromHex('112233332211'),E=i=>hex(functionE1test([...M],[...fromHex(i)],[...K]),'');
     ok('jl-auth: ТЗ-вектор + 3 KAT (2 с железа E87)',[['70B75992E05EA78FEC533BA12979B590','FFE9E6C80CE1F40F5CCEAE20831C5879'],['b6e080ecaff322916d88fad5aa34c2ac','1d8897ac4604d332e8175e81bb292524'],
       ['a53057d376fc0476e5dc68273b5e791e','b3242d82e1df6c545895ecae13b44fea'],['384ac9d8e481e5caaeb8cead20ee8f9e','fe1b5b643a790fdcf585e354dd377b0f']].every(([i,o])=>E(i)===o.toUpperCase()))}

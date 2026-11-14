@@ -29,7 +29,8 @@ function appendLog(e){if(!S.set.expert&&e.dir!=='EV'&&!e.note)return;const li=do
   const L=$('#log');L.append(li);while(L.childElementCount>400)L.firstChild.remove();L.scrollTop=L.scrollHeight}
 const rebuildLog=()=>{$('#log').textContent='';S.log.slice(-1500).forEach(appendLog)};
 const logText=()=>S.log.map(e=>`${e.ts} ${e.dir} ${e.ch} ${e.hex} ${e.note}`).join('\n');
+const QCMD={0x21:'sync_state',0x22:'steps',0x23:'sleep',0x24:'hr',0x25:'pressure',0x26:'oxygen',0x27:'battery',0xC7:'screen_info',0xFF:'ack',0xA0:'test_mode',0xAA:'test_get_flash'}; // qix-ble health_dump/opcodes
 function decode(k,u){if(u[0]===0xFE&&u[1]===0xDC&&u[2]===0xBA){const r=parseRcspResp(u);return`FE flag=${hx(u[3])} cmd=${hx(u[4])} len=${u[5]<<8|u[6]}${r&&u[3]===0?' status='+r.status:''}`}
   const f=parse9E(u);if(f){const c=f.cmd===0xC7?decodeC7(f.payload):null,a=ascii(f.payload).trim();
-    return`9E cmd=${hx(f.cmd)} len=${f.len}${f.ok?'':' !chk'}${c?' '+JSON.stringify(c):f.cmd===0x27&&f.len===2?` battery ${f.payload[1]}% mode=${f.payload[0]}`:a.length>=4?' "'+a.replace(/\n/g,' ')+'"':''}`}
+    return`9E cmd=${hx(f.cmd)}${QCMD[f.cmd]?' '+QCMD[f.cmd]:''} len=${f.len}${f.ok?'':' !chk'}${c?' '+JSON.stringify(c):f.cmd===0x27&&f.len===2?` battery ${f.payload[1]}% mode=${f.payload[0]}`:a.length>=4?' "'+a.replace(/\n/g,' ')+'"':''}`}
   if(k==='ae02'&&u.length<=17)return'auth';return''}

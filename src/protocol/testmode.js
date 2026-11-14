@@ -6,6 +6,7 @@ READBACK.ready=true;
 READBACK.dumpRange=async(ctx,addr,len,onProgress)=>{
   if(!S.P||!S.P.auth.ok||!S.boot)throw new Error('E-DUMP-002 нужны auth + bootstrap');
   const out=new Uint8Array(len),cs=Math.max(16,Math.min(1024,S.set.dumpChunk|0||256)),tmo=Math.max(2000,S.set.reqTo);
+  S.flags.testMode=S.flags.dump=true;saveFlags(); // флаг ставим до 0xA0: даже без ответа бейдж может уже быть в TEST_MODE
   await qreq(0xA0,[0x01],tmo,{expect:null});log('EV','',null,`TEST_MODE on, dump ${hx(addr)}+${hx(len)} chunk ${cs}`);
   S.quiet=true; // 16k кадров на 4 МБ — в журнал только прогресс
   try{for(let off=0;off<len;){if(S.abort)throw new Error('E-ABORT');const n=Math.min(cs,len-off);let r;

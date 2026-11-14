@@ -14,6 +14,7 @@ Object.assign(T,{ok_done:['Прошивка завершена','Flash complete'
   imgChanged:['Загружен другой образ — сверка невозможна','A different image is loaded — cannot verify'],
   i_chunk:['CRC16 чанков (аки окон)','Chunk CRC16 (window acks)'],i_whole:['CRC16 файла (completion 0x20/0x1C)','Whole-file CRC16 (completion 0x20/0x1C)'],
   i_jl:['Внутренние CRC JL-образа','Internal JL image CRCs'],i_boot:['Boot-маркер / имя / версия','Boot marker / name / version'],i_rb:['Readback / HASH_RANGE','Readback / HASH_RANGE'],
+  s_dumpSize:['Дамп: объём','Dump: size'],e_mirror:['Дамп повторяется — флеш, вероятно, меньше выбранного объёма:','Dump repeats — flash is likely smaller than selected size:'],
   s_dumpChunk:['Дамп: байт на запрос 0xAA','Dump: bytes per 0xAA request'],h_dump:['Дамп недоступен','Dump unavailable'],
   h_conn:['нет подключения','not connected'],h_auth:['auth не пройден','auth not passed'],h_boot:['bootstrap не выполнен — переподключитесь','bootstrap not done — reconnect'],
   h_busy:['идёт операция','operation in progress'],h_port:['адаптер readback не портирован','readback adapter not ported'],

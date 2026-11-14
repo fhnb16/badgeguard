@@ -173,6 +173,7 @@ h2,h3{margin:0;font-weight:600}
       <label><span data-i18n="s_lang"></span><select data-set="lang"><option value="ru">Русский</option><option value="en">English</option></select></label>
       <label class="chk"><input type="checkbox" data-set="expert"><span data-i18n="s_expert"></span></label>
       <label class="chk"><input type="checkbox" data-set="chime"><span data-i18n="s_chime"></span></label>
+      <label><span data-i18n="s_dumpSize"></span><select data-set="dumpSize"><option value="65536">64 KiB (проба)</option><option value="1048576">1 MiB</option><option value="2097152">2 MiB</option><option value="4194304">4 MiB</option><option value="8388608">8 MiB</option></select></label>
       <label><span data-i18n="s_dumpChunk"></span><input type="number" data-set="dumpChunk" min="16" max="1024" step="16"></label>
       <label class="chk"><input type="checkbox" data-set="rcspPreAuth"><span data-i18n="s_preAuth"></span></label>
       <label class="chk"><input type="checkbox" data-set="readbackOffer"><span data-i18n="s_rbOffer"></span></label>
@@ -484,10 +485,13 @@ function feTake(b){if(b.length<7)return{frame:null,rest:b};if(!(b[0]===0xFE&&b[1
 const parseRcspResp=u=>{const len=u[5]<<8|u[6],body=u.subarray(7,7+len);return body.length<2?null:{flag:u[3],cmd:u[4],status:body[0],sn:body[1],data:body.subarray(2)}};
 const parseTlv=p=>{const out=[];for(let i=0;i<p.length;){const n=p[i];if(n<1||i+1+n>p.length)break;out.push({type:p[i+1],data:p.slice(i+2,i+1+n)});i+=1+n}return out};
 const TI_NAMES={0:'protocol_version',1:'power_up_sys_info',2:'edr_addr',3:'platform',4:'function_info',5:'firmware_info',6:'sdk_type',7:'uboot_version',8:'support_double_backup',
-  9:'mandatory_upgrade_flag',10:'vid_pid',11:'auth_key',12:'project_code',13:'fw_version',14:'allow_connect',16:'name',17:'connect_ble_only',31:'custom_ver'};
-function decodeTargetInfo(attrs){const o={};for(const{type,data}of attrs){const n=TI_NAMES[type]||'attr_'+type,txt=data.every(b=>b>=32&&b<127)&&data.length?String.fromCharCode(...data):null;
-  o[n]=type===2&&data.length===6?hex(data,':').toLowerCase():type===10&&data.length>=4?`vid=${hx(data[0]<<8|data[1])} pid=${hx(data[2]<<8|data[3])}`:
-    type===13&&data.length>=4?Array.from(data.subarray(0,4)).join('.'):txt||hex(data,'')}return o} // fw_version: трактовка 4 байт неоднозначна (qix-ble sysinfo.py)
+  9:'mandatory_upgrade_flag',10:'vid_pid',11:'auth_key',12:'project_code',13:'fw_version',14:'allow_connect',16:'name',17:'ble_addr',18:'peripherals_support',19:'dev_support_func',21:'file_transfer',31:'custom_ver'};
+const mac6=d=>hex(d.subarray(0,6),':').toLowerCase(); // порядок байт как в кадре; сверить с адресом в ОС
+// HIL E87: attr 2 = 8 Б (адрес + 2 Б), attr 17 = 7 Б (тип + адрес; qix-ble зовёт его connect_ble_only)
+function decodeTargetInfo(attrs){const o={};for(const{type,data}of attrs){const n=TI_NAMES[type]||'attr_'+type,txt=data.length>=3&&data.every(b=>b>=32&&b<127)?String.fromCharCode(...data):null;
+  o[n]=type===2&&data.length>=6?mac6(data)+(data.length>6?' +'+hex(data.subarray(6),''):''):type===17&&data.length===7?`type ${data[0]} ${mac6(data.subarray(1))}`:
+    type===10&&data.length>=4?`vid=${hx(data[0]<<8|data[1])} pid=${hx(data[2]<<8|data[3])}`:type===11?`${data.length} B (скрыт)`: // ключ устройства в паспорт не пишем
+    type===13&&data.length>=4?Array.from(data.subarray(0,4)).join('.'):data.length===1?String(data[0]):txt||hex(data,'')}return o} // fw_version: трактовка 4 Б неоднозначна (qix-ble)
 const GENERIC4M={family:'unknown',flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000}};
 // C7 (ответ на C6), 13 B, u16 BE. 360×360 совпадает с панелью из ТЗ; назначение w2/h2 (368) и f5..f7 не подтверждено
 function decodeC7(p){if(!p||p.length<13)return null;const b=o=>p[o]<<8|p[o+1];return{width:b(0),height:b(2),w2:b(4),h2:b(6),f5:b(8),f6:p[10],f7:b(11)}}
@@ -567,6 +571,8 @@ function selfTest(){
   ok('feTake: fragmented RCSP frame (btsnoop GetTargetInfo)',!f1.frame&&!!f2.frame&&eq(f2.frame,ti));
   const tlv=decodeTargetInfo(parseTlv(Uint8Array.of(5,16,116,101,115,116,7,2,0x12,0x34,0x56,0x78,0x9a,0xbc,5,10,0x05,0xb9,0xab,0xcd,5,13,1,16,2,28)));
   ok('target_info TLV: name / MAC / vid_pid / fw',tlv.name==='test'&&tlv.edr_addr==='12:34:56:78:9a:bc'&&tlv.vid_pid==='vid=0x5B9 pid=0xABCD'&&tlv.fw_version==='1.16.2.28');
+  const real=parseRcspResp(fromHex('FE DC BA 00 03 00 7D 00 01 02 00 20 05 01 00 00 00 00 09 02 46 88 00 02 09 DC 0E 00 07 04 00 00 00 04 00 00 03 05 00 01 02 06 0D 03 07 31 30 05 08 00 01 01 00 04 09 00 00 00 05 0A 00 02 00 8B 11 0B 68 45 39 79 66 73 65 58 36 55 64 4B 37 72 46 68 15 0C 6A 6C 5F 73 64 6B 5F 61 63 36 39 37 5F 70 75 62 6C 69 73 68 05 0D 01 10 02 1C 08 11 00 46 88 00 02 09 DC 02 12 00 03 13 04 04 05 15 00 00 00 07 EF')),rt=real&&decodeTargetInfo(parseTlv(real.data));
+  ok('target_info from real E87: ac697 / 1.16.2.28 / MAC / auth_key hidden',!!rt&&real.status===0&&rt.project_code==='jl_sdk_ac697_publish'&&rt.fw_version==='1.16.2.28'&&rt.edr_addr.startsWith('46:88:00:02:09:dc')&&rt.ble_addr==='type 0 46:88:00:02:09:dc'&&!/hE9y/.test(JSON.stringify(rt))&&rt.protocol_version==='32');
   if(typeof functionE1test==='function'){const K=fromHex('06775F87918DD423005DF1D8CF0C142B'),M=fromHex('112233332211'),E=i=>hex(functionE1test([...M],[...fromHex(i)],[...K]),'');
     ok('jl-auth: ТЗ-вектор + 3 KAT (2 с железа E87)',[['70B75992E05EA78FEC533BA12979B590','FFE9E6C80CE1F40F5CCEAE20831C5879'],['b6e080ecaff322916d88fad5aa34c2ac','1d8897ac4604d332e8175e81bb292524'],
       ['a53057d376fc0476e5dc68273b5e791e','b3242d82e1df6c545895ecae13b44fea'],['384ac9d8e481e5caaeb8cead20ee8f9e','fe1b5b643a790fdcf585e354dd377b0f']].every(([i,o])=>E(i)===o.toUpperCase()))}
@@ -773,6 +779,7 @@ Object.assign(T,{ok_done:['Прошивка завершена','Flash complete'
   imgChanged:['Загружен другой образ — сверка невозможна','A different image is loaded — cannot verify'],
   i_chunk:['CRC16 чанков (аки окон)','Chunk CRC16 (window acks)'],i_whole:['CRC16 файла (completion 0x20/0x1C)','Whole-file CRC16 (completion 0x20/0x1C)'],
   i_jl:['Внутренние CRC JL-образа','Internal JL image CRCs'],i_boot:['Boot-маркер / имя / версия','Boot marker / name / version'],i_rb:['Readback / HASH_RANGE','Readback / HASH_RANGE'],
+  s_dumpSize:['Дамп: объём','Dump: size'],e_mirror:['Дамп повторяется — флеш, вероятно, меньше выбранного объёма:','Dump repeats — flash is likely smaller than selected size:'],
   s_dumpChunk:['Дамп: байт на запрос 0xAA','Dump: bytes per 0xAA request'],h_dump:['Дамп недоступен','Dump unavailable'],
   h_conn:['нет подключения','not connected'],h_auth:['auth не пройден','auth not passed'],h_boot:['bootstrap не выполнен — переподключитесь','bootstrap not done — reconnect'],
   h_busy:['идёт операция','operation in progress'],h_port:['адаптер readback не портирован','readback adapter not ported'],
@@ -781,7 +788,7 @@ Object.assign(T,{ok_done:['Прошивка завершена','Flash complete'
 
 /* ---- src/state/store.js ---- */
 /* ===== state ===== */
-const DEF={connectTo:15000,reqTo:3000,winTo:5000,chunk:490,win:8,retries:3,expert:false,chime:false,theme:'dark',lang:'ru',readbackOffer:true,spotN:16,verifySpan:'0x0:0xFC000',hashTo:30000,rcspPreAuth:false,dumpChunk:256};
+const DEF={connectTo:15000,reqTo:3000,winTo:5000,chunk:490,win:8,retries:3,expert:false,chime:false,theme:'dark',lang:'ru',readbackOffer:true,spotN:16,verifySpan:'0x0:0xFC000',hashTo:30000,rcspPreAuth:false,dumpChunk:256,dumpSize:'4194304'};
 const LS=(k,d)=>{try{return JSON.parse(localStorage.getItem('bg.'+k))??d}catch{return d}};
 const SV=(k,v)=>{try{localStorage.setItem('bg.'+k,JSON.stringify(v))}catch{}};
 const S={set:{...DEF,...LS('set',{})},allow:LS('allow',{uboot:[],image:[]}),flags:LS('flags',{testMode:false,dump:false,probe:false}),profiles:LS('profiles.v3',null)||structuredClone(PROFILES),
@@ -822,9 +829,10 @@ function appendLog(e){if(!S.set.expert&&e.dir!=='EV'&&!e.note)return;const li=do
   const L=$('#log');L.append(li);while(L.childElementCount>400)L.firstChild.remove();L.scrollTop=L.scrollHeight}
 const rebuildLog=()=>{$('#log').textContent='';S.log.slice(-1500).forEach(appendLog)};
 const logText=()=>S.log.map(e=>`${e.ts} ${e.dir} ${e.ch} ${e.hex} ${e.note}`).join('\n');
+const QCMD={0x21:'sync_state',0x22:'steps',0x23:'sleep',0x24:'hr',0x25:'pressure',0x26:'oxygen',0x27:'battery',0xC7:'screen_info',0xFF:'ack',0xA0:'test_mode',0xAA:'test_get_flash'}; // qix-ble health_dump/opcodes
 function decode(k,u){if(u[0]===0xFE&&u[1]===0xDC&&u[2]===0xBA){const r=parseRcspResp(u);return`FE flag=${hx(u[3])} cmd=${hx(u[4])} len=${u[5]<<8|u[6]}${r&&u[3]===0?' status='+r.status:''}`}
   const f=parse9E(u);if(f){const c=f.cmd===0xC7?decodeC7(f.payload):null,a=ascii(f.payload).trim();
-    return`9E cmd=${hx(f.cmd)} len=${f.len}${f.ok?'':' !chk'}${c?' '+JSON.stringify(c):f.cmd===0x27&&f.len===2?` battery ${f.payload[1]}% mode=${f.payload[0]}`:a.length>=4?' "'+a.replace(/\n/g,' ')+'"':''}`}
+    return`9E cmd=${hx(f.cmd)}${QCMD[f.cmd]?' '+QCMD[f.cmd]:''} len=${f.len}${f.ok?'':' !chk'}${c?' '+JSON.stringify(c):f.cmd===0x27&&f.len===2?` battery ${f.payload[1]}% mode=${f.payload[0]}`:a.length>=4?' "'+a.replace(/\n/g,' ')+'"':''}`}
   if(k==='ae02'&&u.length<=17)return'auth';return''}
 
 /* ---- src/ble/transport.js ---- */
@@ -919,6 +927,7 @@ READBACK.ready=true;
 READBACK.dumpRange=async(ctx,addr,len,onProgress)=>{
   if(!S.P||!S.P.auth.ok||!S.boot)throw new Error('E-DUMP-002 нужны auth + bootstrap');
   const out=new Uint8Array(len),cs=Math.max(16,Math.min(1024,S.set.dumpChunk|0||256)),tmo=Math.max(2000,S.set.reqTo);
+  S.flags.testMode=S.flags.dump=true;saveFlags(); // флаг ставим до 0xA0: даже без ответа бейдж может уже быть в TEST_MODE
   await qreq(0xA0,[0x01],tmo,{expect:null});log('EV','',null,`TEST_MODE on, dump ${hx(addr)}+${hx(len)} chunk ${cs}`);
   S.quiet=true; // 16k кадров на 4 МБ — в журнал только прогресс
   try{for(let off=0;off<len;){if(S.abort)throw new Error('E-ABORT');const n=Math.min(cs,len-off);let r;
@@ -1119,21 +1128,25 @@ async function certify(buf,passport,prof,method){
   const c=await validateDump(buf,passport,prof,method,{...JL,reRead:method==='ble-testmode'&&READBACK.ready?(a,l)=>READBACK.dumpRange(rctx(),a,l):null,spotN:S.set.spotN,sha:sha256hex});
   await signCert(c);S.dumpCert={...c,sigOk:true};
   log('EV','',null,`certificate ${method} verified=${c.verified} ${c.errors.join(', ')}`);toast(t(c.verified?'certOk':'certBad'),c.verified?'ok':'block');render();return c}
+// геометрия для дампа: из профиля, если он её знает (у e87-ac697x её нет), иначе общая 4 МиБ с размером из настроек
+const dumpProf=size=>{const p=S.P&&S.profiles[S.P.profileId];return p&&p.flash?p:{...GENERIC4M,flash:{...GENERIC4M.flash,size:size||GENERIC4M.flash.size}}};
+// дамп больше реального флеша обычно «заворачивается» на начало — ловим зеркало
+function mirrorCheck(buf){for(let h=buf.length>>1;h>=0x40000;h>>=1){let m=true;for(let o=0;o<h&&m;o+=0x10000)m=eq(buf.subarray(o,o+4096),buf.subarray(h+o,h+o+4096));if(m)return h}return 0}
 async function takeDump(){
   if(dumpBlockers().length||!confirm(t('dumpConfirm')))return;
-  const prof=S.profiles[S.P.profileId]||GENERIC4M,passport=structuredClone(S.P);S.abort=false;S.flags.dump=S.flags.testMode=true;saveFlags();
-  await withWake(async()=>{try{setPhase('dumping');S.prog={done:0,total:prof.flash.size,t0:performance.now(),start:0,win:0};
-      S.dumpBuf=await READBACK.dumpRange(rctx(),0,prof.flash.size,d=>{S.prog.done=d;tick()});
+  const size=Number(S.set.dumpSize)||0x400000,prof=dumpProf(size),passport=structuredClone(S.P);S.abort=false;
+  await withWake(async()=>{try{setPhase('dumping');S.prog={done:0,total:size,t0:performance.now(),start:0,win:0};
+      S.dumpBuf=await READBACK.dumpRange(rctx(),0,size,d=>{S.prog.done=d;tick()});
+      const mir=mirrorCheck(S.dumpBuf);if(mir){log('EV','',null,`dump: mirror at ${hx(mir)} → flash likely ${hx(mir)} B`);toast(t('e_mirror')+' '+hx(mir),'warn')}
       const c=await certify(S.dumpBuf,passport,prof,'ble-testmode');download('dump.bin',S.dumpBuf);download('dump.cert.json',c);setPhase('done')}
-    catch(e){setPhase('error');toast('dump: '+e.message,'block')}})}
+    catch(e){setPhase('error');log('EV','',null,'dump ✕ '+e.message);toast('dump: '+e.message,'block')}})}
 async function spotCheck(){
-  if(!S.dumpBuf||!S.dumpCert||dumpBlockers().length)return;
-  S.flags.testMode=true;saveFlags();S.abort=false;
-  await withWake(async()=>{try{setPhase('dumping');const c=await certify(S.dumpBuf,S.dumpCert.passport,S.profiles[S.P.profileId]||GENERIC4M,'ble-testmode');download('dump.cert.json',c);setPhase('done')}
-    catch(e){setPhase('error');toast('spot-check: '+e.message,'block')}})}
+  if(!S.dumpBuf||!S.dumpCert||dumpBlockers().length)return;S.abort=false;
+  await withWake(async()=>{try{setPhase('dumping');const c=await certify(S.dumpBuf,S.dumpCert.passport,dumpProf(S.dumpBuf.length),'ble-testmode');download('dump.cert.json',c);setPhase('done')}
+    catch(e){setPhase('error');log('EV','',null,'spot-check ✕ '+e.message);toast('spot-check: '+e.message,'block')}})}
 async function certifyWired(){
   if(!S.R||S.R.kind!=='full-dump'||!S.P||ACTIVE.includes(S.phase)||!confirm(t('wiredConfirm')))return;
-  try{download('dump.cert.json',await certify(new Uint8Array(S.buf),S.P,S.profiles[S.P.profileId]||GENERIC4M,'wired-uboot'))}catch(e){toast('cert: '+e.message,'block')}}
+  try{download('dump.cert.json',await certify(new Uint8Array(S.buf),S.P,dumpProf(S.buf.byteLength),'wired-uboot'))}catch(e){toast('cert: '+e.message,'block')}}
 
 // причины, по которым дамп недоступен — показываются под кнопками вместо «серой» без объяснений
 const dumpBlockers=()=>[S.conn!=='on'&&'h_conn',!(S.P&&S.P.auth.ok)&&'h_auth',!S.boot&&'h_boot',ACTIVE.includes(S.phase)&&'h_busy',!READBACK.ready&&'h_port'].filter(Boolean);

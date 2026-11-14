@@ -37,21 +37,25 @@ async function certify(buf,passport,prof,method){
   const c=await validateDump(buf,passport,prof,method,{...JL,reRead:method==='ble-testmode'&&READBACK.ready?(a,l)=>READBACK.dumpRange(rctx(),a,l):null,spotN:S.set.spotN,sha:sha256hex});
   await signCert(c);S.dumpCert={...c,sigOk:true};
   log('EV','',null,`certificate ${method} verified=${c.verified} ${c.errors.join(', ')}`);toast(t(c.verified?'certOk':'certBad'),c.verified?'ok':'block');render();return c}
+// геометрия для дампа: из профиля, если он её знает (у e87-ac697x её нет), иначе общая 4 МиБ с размером из настроек
+const dumpProf=size=>{const p=S.P&&S.profiles[S.P.profileId];return p&&p.flash?p:{...GENERIC4M,flash:{...GENERIC4M.flash,size:size||GENERIC4M.flash.size}}};
+// дамп больше реального флеша обычно «заворачивается» на начало — ловим зеркало
+function mirrorCheck(buf){for(let h=buf.length>>1;h>=0x40000;h>>=1){let m=true;for(let o=0;o<h&&m;o+=0x10000)m=eq(buf.subarray(o,o+4096),buf.subarray(h+o,h+o+4096));if(m)return h}return 0}
 async function takeDump(){
   if(dumpBlockers().length||!confirm(t('dumpConfirm')))return;
-  const prof=S.profiles[S.P.profileId]||GENERIC4M,passport=structuredClone(S.P);S.abort=false;S.flags.dump=S.flags.testMode=true;saveFlags();
-  await withWake(async()=>{try{setPhase('dumping');S.prog={done:0,total:prof.flash.size,t0:performance.now(),start:0,win:0};
-      S.dumpBuf=await READBACK.dumpRange(rctx(),0,prof.flash.size,d=>{S.prog.done=d;tick()});
+  const size=Number(S.set.dumpSize)||0x400000,prof=dumpProf(size),passport=structuredClone(S.P);S.abort=false;
+  await withWake(async()=>{try{setPhase('dumping');S.prog={done:0,total:size,t0:performance.now(),start:0,win:0};
+      S.dumpBuf=await READBACK.dumpRange(rctx(),0,size,d=>{S.prog.done=d;tick()});
+      const mir=mirrorCheck(S.dumpBuf);if(mir){log('EV','',null,`dump: mirror at ${hx(mir)} → flash likely ${hx(mir)} B`);toast(t('e_mirror')+' '+hx(mir),'warn')}
       const c=await certify(S.dumpBuf,passport,prof,'ble-testmode');download('dump.bin',S.dumpBuf);download('dump.cert.json',c);setPhase('done')}
-    catch(e){setPhase('error');toast('dump: '+e.message,'block')}})}
+    catch(e){setPhase('error');log('EV','',null,'dump ✕ '+e.message);toast('dump: '+e.message,'block')}})}
 async function spotCheck(){
-  if(!S.dumpBuf||!S.dumpCert||dumpBlockers().length)return;
-  S.flags.testMode=true;saveFlags();S.abort=false;
-  await withWake(async()=>{try{setPhase('dumping');const c=await certify(S.dumpBuf,S.dumpCert.passport,S.profiles[S.P.profileId]||GENERIC4M,'ble-testmode');download('dump.cert.json',c);setPhase('done')}
-    catch(e){setPhase('error');toast('spot-check: '+e.message,'block')}})}
+  if(!S.dumpBuf||!S.dumpCert||dumpBlockers().length)return;S.abort=false;
+  await withWake(async()=>{try{setPhase('dumping');const c=await certify(S.dumpBuf,S.dumpCert.passport,dumpProf(S.dumpBuf.length),'ble-testmode');download('dump.cert.json',c);setPhase('done')}
+    catch(e){setPhase('error');log('EV','',null,'spot-check ✕ '+e.message);toast('spot-check: '+e.message,'block')}})}
 async function certifyWired(){
   if(!S.R||S.R.kind!=='full-dump'||!S.P||ACTIVE.includes(S.phase)||!confirm(t('wiredConfirm')))return;
-  try{download('dump.cert.json',await certify(new Uint8Array(S.buf),S.P,S.profiles[S.P.profileId]||GENERIC4M,'wired-uboot'))}catch(e){toast('cert: '+e.message,'block')}}
+  try{download('dump.cert.json',await certify(new Uint8Array(S.buf),S.P,dumpProf(S.buf.byteLength),'wired-uboot'))}catch(e){toast('cert: '+e.message,'block')}}
 
 // причины, по которым дамп недоступен — показываются под кнопками вместо «серой» без объяснений
 const dumpBlockers=()=>[S.conn!=='on'&&'h_conn',!(S.P&&S.P.auth.ok)&&'h_auth',!S.boot&&'h_boot',ACTIVE.includes(S.phase)&&'h_busy',!READBACK.ready&&'h_port'].filter(Boolean);

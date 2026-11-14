@@ -1,4 +1,4 @@
-# BadgeGuard v1.3 — инспекция и безопасный OTA бейджей E87 (JieLi AC707N)
+# BadgeGuard v1.4 — инспекция и безопасный OTA бейджей E87 (JieLi AC707N)
 
 Web Bluetooth SPA, fail-closed. ТЗ v1.0 + Дополнение №1 (целостность: L0/L1/L2, HASH_RANGE, сертификаты дампов).
 **Только своё железо, research-use. Кирпич восстанавливается только USB-ISP.**
@@ -40,6 +40,7 @@ src/ui/*  src/state/*  src/util/*  src/main.js  src/pwa/*
 - Профиль ключа «A» (6BE9…) есть только в README референсов, их код использует 0677… — удалён.
 - FD05 не подписываем: по qix-ble это вызывает silent reject `REQ_UPDATE`.
 - SDK-строка `jl_sdk_ac707…` в BLE-трафике AC707N не подтверждена (в референсах встречается только `ac697`) → профиль пока не определяется автоматически.
+- HIL 2026-11-15: auth ✓, bootstrap 5/5 ✓, battery push 93 %; target_info: `project_code = jl_sdk_ac697_publish`, fw `1.16.2.28`, адрес `46:88:00:02:09:dc` (порядок байт не сверен). Тот же fw `01 10 02 1C` у ElectronicCats (AC707N) → по BLE семейство чипа неоднозначно, профиль ac697x = READ-ONLY.
 - ElectronicCats рекомендуют дамп **проводом** как источник для restore; BLE-дамп (TEST_MODE) — резерв, после него обязателен power-cycle.
 
 ## Тесты
