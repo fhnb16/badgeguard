@@ -1,0 +1,95 @@
+const crc16=(b,c=0)=>{for(let i=0;i<b.length;i++){c^=b[i]<<8;for(let j=0;j<8;j++)c=(c&0x8000?(c<<1)^0x1021:c<<1)&0xFFFF}return c};
+const hex=(u,sep=' ')=>Array.from(u||[],x=>x.toString(16).padStart(2,'0')).join(sep).toUpperCase();
+const fromHex=s=>Uint8Array.from(s.replace(/[^0-9a-f]/gi,'').match(/../g)||[],h=>parseInt(h,16));
+const hx=n=>n==null?'—':'0x'+n.toString(16).toUpperCase();
+const eq=(a,b)=>!!a&&!!b&&a.length===b.length&&a.every((x,i)=>x===b[i]);
+
+const PROFILES={
+  'e87-ac707n':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE']},family:'AC707N/BR35',ota:true,chipkey:0x9847,
+    flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},ubootSha256Allowlist:[],knownGoodImages:[],expectedForm:null,verifySpan:[0,0xFC000]},
+  'e87-ac697x':{match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC697x/BR30',ota:false},
+  'e87-ac701n':{match:{sdkRegex:'jl_sdk_ac701',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC701N/BR28',ota:false}};
+const familyOf=s=>/ac707/.test(s||'')?'AC707N/BR35':/ac697/.test(s||'')?'AC697x/BR30':/ac701/.test(s||'')?'AC701N/BR28':'unknown';
+function matchProfile(P,profiles){
+  for(const[id,p]of Object.entries(profiles)){const m=p.match;
+    if(P.sdkString&&new RegExp(m.sdkRegex).test(P.sdkString)&&m.gattServices.every(s=>P.gatt.services.some(u=>u.startsWith(s)||u.startsWith('0000'+s)))&&m.names.some(n=>(P.name||'').startsWith(n)))return id}
+  return null}
+const profileForSdk=(sdk,profiles)=>sdk?Object.keys(profiles).find(id=>new RegExp(profiles[id].match.sdkRegex).test(sdk))||null:null;
+// >0 upgrade, 0 same, <0 downgrade, null = unknown / different line
+function vcmp(a,b){if(!a||!b)return null;const x=a.split('.').map(Number),y=b.split('.').map(Number);if(x[0]!==y[0]||x[1]!==y[1])return null;
+  for(let i=2;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return Math.sign(d)}return 0}
+
+const RULE_TXT={
+  'R-CHIP':['Семейство чипа устройства = цель образа','Device chip family = image target'],
+  'R-KEY':['chipkey образа = chipkey профиля','Image chipkey = profile chipkey'],
+  'R-UBOOT':['uboot образа — OEM из allowlist (байт-в-байт)','Image uboot is allowlisted OEM (byte-exact)'],
+  'R-WRAP':['Обёртка соответствует пути (Qix → bcaf, RCSP → vanilla)','Wrapper matches path (Qix → bcaf, RCSP → vanilla)'],
+  'R-CRC':['Все CRC контейнера и Qix валидны','All container and Qix CRCs valid'],
+  'R-SIZE':['app.bin ≤ appSlot, образ ≤ лимита','app.bin ≤ appSlot, image within limit'],
+  'R-GEOM':['Геометрия флеша образа = профиль','Image flash geometry = profile'],
+  'R-PATH':['OTA-путь доступен на устройстве и в приложении','OTA path available on device and in app'],
+  'R-BATT':['Батарея ≥ 30% или зарядка','Battery ≥ 30% or charging'],
+  'R-TEST':['TEST_MODE не активен, dump в сессии не было','TEST_MODE inactive, no dump this session'],
+  'R-CONN':['Одно соединение, GATT жив, BT телефона выключен','Single link, GATT alive, phone BT off'],
+  'R-DUMP':['Дамп — только свой (паспорт сертификата = устройство) и только через RCSP. Чужой дамп клонирует MAC и имя.','Own dump only (certificate passport = device), RCSP path only. A foreign dump clones MAC and name.'],
+  'R-VER':['Без даунгрейда в одной линейке версий','No downgrade within a version line'],
+  'R-HASH':['SHA-256 в known-good allowlist','SHA-256 in known-good allowlist'],
+  'R-PROBE':['Не было probe без power-cycle','No probe without power-cycle'],
+  'R-FORM':['Digest сравнивается в одной форме (срез flash.bin / калибровка профиля)','Digests compared in one form (flash.bin slice / profile calibration)'],
+  'R-DUMP-INTEG':['Restore только из дампа с verified-сертификатом, подписью и совпадающим SHA-256','Restore only from a dump with a verified, signed certificate and matching SHA-256']};
+
+function evaluate(P,R,c){
+  const rules=[],L=c.lang==='en'?1:0,add=(id,severity,evidence)=>rules.push({id,severity,message:RULE_TXT[id][L],evidence});
+  const pr=c.profiles[P.profileId],geo=pr&&pr.flash,qix=c.path==='qix',g=R.geometry,b=P.battery;
+  add('R-CHIP',pr&&P.chipFamily!=='unknown'&&pr.family===P.chipFamily&&R.targetProfileId===P.profileId?'pass':'block',`dev=${P.profileId||'?'} ${P.chipFamily} / img=${R.targetProfileId||'?'}`);
+  add('R-KEY',pr&&pr.chipkey!=null&&R.chipkey===pr.chipkey?'pass':'block',`img=${hx(R.chipkey)} exp=${hx(pr&&pr.chipkey)}`);
+  const ub=[...((pr&&pr.ubootSha256Allowlist)||[]),...c.ubootAllow];
+  add('R-UBOOT',R.ubootHash&&ub.includes(R.ubootHash)?'pass':'block',`uboot=${R.ubootHash?R.ubootHash.slice(0,16)+'…':'—'} allowlist=${ub.length}`);
+  add('R-WRAP',(qix?R.qixWrapped===true:R.qixWrapped===false)?'pass':'block',`path=${c.path} bcaf=${R.qixWrapped}`);
+  add('R-CRC',['hdr','list','data'].every(k=>R.crc[k]===true)&&(!R.qixWrapped||R.crc.qix===true)&&R.internalJlCrcOk===true?'pass':'block',JSON.stringify(R.crc)+' jl='+R.internalJlCrcOk);
+  add('R-SIZE',geo&&R.appBinSize!=null&&R.appBinSize<=geo.appSlot&&R.size<=c.maxImage?'pass':'block',`app=${hx(R.appBinSize)} slot=${hx(geo&&geo.appSlot)} file=${R.size}`);
+  add('R-GEOM',geo&&g&&g.flashSize===geo.size&&g.appSlot===geo.appSlot&&g.codeSpan[0]===geo.codeSpan[0]&&g.codeSpan[1]===geo.codeSpan[1]?'pass':'block',g?`flash=${hx(g.flashSize)} code=[${g.codeSpan.map(hx)}] slot=${hx(g.appSlot)}`:'—');
+  const fm=pr&&pr.expectedForm,sl=R.slices||{};
+  add('R-FORM',(fm==='on-flash'?sl.onflash:fm==='plaintext'?sl.plain:sl.onflash&&sl.plain)?'pass':'block',`form=${fm||'uncalibrated'} onflash=${!!sl.onflash} plain=${!!sl.plain}`);
+  const tr=qix?c.qixReady:c.rcspReady;
+  add('R-PATH',pr&&pr.ota&&tr&&(qix?P.capabilities.qixFd00:P.capabilities.rcspOta)?'pass':'block',`profileOta=${!!(pr&&pr.ota)} fd00=${P.capabilities.qixFd00} transport=${tr}`);
+  add('R-BATT',b.level!=null&&(b.level>=30||b.charging===true)?'pass':'block',`${b.level==null?'—':b.level}% charging=${b.charging}`);
+  add('R-TEST',!c.flags.testMode&&!c.flags.dump&&!P.testModeSuspected?'pass':'block',`test=${c.flags.testMode||P.testModeSuspected} dump=${c.flags.dump}`);
+  add('R-CONN',c.connected&&c.phoneBtOff?'pass':'block',`gatt=${c.connected} phoneBtOff=${c.phoneBtOff}`);
+  const dump=R.kind==='full-dump'||R.containsKeyMac,dc=c.dumpCert,dp=dc&&dc.passport,own=dump&&dp&&dp.deviceId===P.deviceId;
+  add('R-DUMP',!dump?'pass':own&&!qix?'warn':'block',dump?`cert.passport=${dp?dp.deviceId:'—'} device=${P.deviceId} path=${c.path}`:'no dump');
+  add('R-DUMP-INTEG',!dump||dc&&dc.verified===true&&dc.sigOk===true&&dc.dumpSha256===R.sha256?'pass':'block',dump?(dc?`verified=${dc.verified} sig=${dc.sigOk} sha=${dc.dumpSha256===R.sha256}`:'no certificate'):'no dump');
+  const v=vcmp(R.version,P.fwVersion);
+  add('R-VER',v==null||v<0?'warn':'pass',`${P.fwVersion||'—'} → ${R.version||'—'}`);
+  const kg=[...((pr&&pr.knownGoodImages)||[]).map(x=>x.sha256),...c.imageAllow];
+  add('R-HASH',kg.includes(R.sha256)?'pass':'warn',(R.sha256||'').slice(0,16)+'…');
+  add('R-PROBE',c.flags.probe?'block':'pass',`probe=${c.flags.probe}`);
+  return{overall:rules.some(r=>r.severity==='block')?'BLOCK':rules.some(r=>r.severity==='warn')?'WARN':'ALLOW',rules}}
+
+function fixture(){
+  const P={deviceId:'dev',name:'EC-BADGE',chipFamily:'AC707N/BR35',sdkString:'jl_sdk_ac707_publish',fwVersion:'2.711.1.0.3',battery:{level:80,charging:false},capabilities:{qixFd00:true,rcspOta:true},profileId:'e87-ac707n',testModeSuspected:false,gatt:{services:[]}};
+  const R={size:0x90000,sha256:'h',kind:'fw-custom',qixWrapped:true,chipkey:0x9847,targetProfileId:'e87-ac707n',ubootHash:'u',appBinSize:0x80000,crc:{hdr:true,list:true,data:true,qix:true},version:'2.711.1.0.4',geometry:{flashSize:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},containsKeyMac:false,internalJlCrcOk:true,slices:{onflash:'a',plain:'b'}};
+  const c={path:'qix',lang:'ru',profiles:PROFILES,ubootAllow:['u'],imageAllow:['h'],maxImage:16<<20,qixReady:true,rcspReady:true,connected:true,phoneBtOff:true,flags:{testMode:false,dump:false,probe:false},dumpCert:null};
+  return{P,R,c}}
+const NEG={'R-CHIP':f=>f.R.targetProfileId='e87-ac701n','R-KEY':f=>f.R.chipkey=0x1234,'R-UBOOT':f=>f.R.ubootHash='native','R-WRAP':f=>f.R.qixWrapped=false,
+  'R-CRC':f=>f.R.crc.data=false,'R-SIZE':f=>f.R.appBinSize=0x200000,'R-GEOM':f=>f.R.geometry.appSlot=1,'R-PATH':f=>f.P.capabilities.qixFd00=false,
+  'R-BATT':f=>f.P.battery.level=10,'R-TEST':f=>f.c.flags.testMode=true,'R-CONN':f=>f.c.phoneBtOff=false,'R-DUMP':f=>f.R.containsKeyMac=true,
+  'R-VER':f=>f.R.version='2.711.1.0.1','R-HASH':f=>f.R.sha256='x','R-PROBE':f=>f.c.flags.probe=true,'R-FORM':f=>f.R.slices.plain=null,'R-DUMP-INTEG':f=>f.R.kind='full-dump'};
+function selfTest(){
+  const out=[],ok=(n,v)=>out.push({n,ok:!!v});
+  ok('CRC-16/XMODEM "123456789" = 0x31C3',crc16(new TextEncoder().encode('123456789'))===0x31C3);
+  let f=fixture();ok('rules: reference → ALLOW',evaluate(f.P,f.R,f.c).overall==='ALLOW');
+  const sevOf=(f,id)=>evaluate(f.P,f.R,f.c).rules.find(r=>r.id===id).severity;
+  f=fixture();f.R.internalJlCrcOk=null;ok('R-CRC: internal JL CRC unknown → BLOCK',sevOf(f,'R-CRC')==='block');
+  f=fixture();f.c.profiles={...PROFILES,'e87-ac707n':{...PROFILES['e87-ac707n'],expectedForm:'on-flash'}};f.R.slices.plain=null;
+  ok('R-FORM: calibrated on-flash + flash.bin slice → pass',sevOf(f,'R-FORM')==='pass');
+  f.R.slices={onflash:null,plain:'b'};ok('R-FORM: on-flash profile + app.bin only → BLOCK',sevOf(f,'R-FORM')==='block');
+  f=fixture();f.P.battery={level:10,charging:true};ok('R-BATT: <30% + charging → pass',evaluate(f.P,f.R,f.c).overall==='ALLOW');
+  for(const[id,mut]of Object.entries(NEG)){f=fixture();mut(f);const v=evaluate(f.P,f.R,f.c);ok(`${id} → ${v.overall}`,v.rules.find(r=>r.id===id).severity!=='pass'&&v.overall!=='ALLOW')}
+  f=fixture();Object.assign(f.R,{kind:'full-dump',containsKeyMac:true,qixWrapped:false});f.c.path='rcsp';const cert={passport:{deviceId:'dev'},verified:true,sigOk:true,dumpSha256:'h'};
+  f.c.dumpCert=cert;ok('R-DUMP: own verified dump + RCSP → WARN',sevOf(f,'R-DUMP')==='warn'&&sevOf(f,'R-DUMP-INTEG')==='pass');
+  f.c.dumpCert={...cert,verified:false};ok('R-DUMP-INTEG: unverified certificate → BLOCK',sevOf(f,'R-DUMP-INTEG')==='block');
+  f.c.dumpCert={...cert,sigOk:false};ok('R-DUMP-INTEG: bad signature → BLOCK',sevOf(f,'R-DUMP-INTEG')==='block');
+  f.c.dumpCert={...cert,dumpSha256:'other'};ok('R-DUMP-INTEG: certificate of another file → BLOCK',sevOf(f,'R-DUMP-INTEG')==='block');
+  f.c.dumpCert={...cert,passport:{deviceId:'other'}};ok('R-DUMP: foreign dump → BLOCK',evaluate(f.P,f.R,f.c).overall==='BLOCK');
+  return out}

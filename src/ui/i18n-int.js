@@ -1,0 +1,16 @@
+/* ===== i18n: Дополнение №1 ===== */
+Object.assign(T,{ok_done:['Прошивка завершена','Flash complete'],integrity:['Целостность','Integrity'],
+  dumpCert:['Сертификат дампа (dump.cert.json) для restore:','Dump certificate (dump.cert.json) for restore:'],certWired:['Сертифицировать загруженный дамп (провод)','Certify loaded dump (wired)'],
+  rbL1:['Verify readback (L1)','Verify readback (L1)'],rhL2:['Re-hash (L2)','Re-hash (L2)'],acceptPartial:['Принять partial','Accept partial'],copyDig:['Копировать digest','Copy digests'],
+  takeDump:['Снять дамп (BLE, TEST_MODE)','Dump flash (BLE, TEST_MODE)'],spot:['Spot-check дампа','Spot-check dump'],certView:['Сертификат дампа','Dump certificate'],
+  s_rbOffer:['Предлагать readback (L1)','Offer readback (L1)'],s_spotN:['Spot-check, блоков по 4 КБ','Spot-check, 4 KB blocks'],s_span:['VERIFY_SPAN (0xA:0xB)','VERIFY_SPAN (0xA:0xB)'],s_hashTo:['Таймаут HASH_RANGE, мс','HASH_RANGE timeout, ms'],
+  rbConfirm:['Readback (L1) переведёт бейдж в TEST_MODE: перед следующей OTA обязателен power-cycle. Выполнить?','Readback (L1) puts the badge into TEST_MODE: power-cycle before the next OTA. Run it?'],
+  dumpConfirm:['Дамп по BLE включает TEST_MODE и занимает минуты. Дамп никогда не прошивается автоматически. Продолжить?','A BLE dump enables TEST_MODE and takes minutes. Dumps are never flashed automatically. Continue?'],
+  wiredConfirm:['Подтвердите: дамп снят проводом (uboot) с ПОДКЛЮЧЁННОГО сейчас юнита. Сертификат привяжет его к паспорту этого устройства.','Confirm: this dump was read over wire (uboot) from the CURRENTLY connected unit. The certificate binds it to this device passport.'],
+  certOk:['Сертификат дампа: verified','Dump certificate: verified'],certBad:['Сертификат дампа НЕ verified — restore запрещён','Dump certificate NOT verified — restore blocked'],
+  certSig:['Подпись сертификата не подтверждена этим браузером — сертифицируйте дамп заново','Certificate signature not verified by this browser — re-certify the dump'],
+  e_int:['Целостность: failed. Повтор вслепую запрещён. Восстановление — USB-ISP или свой verified-дамп через RCSP. Прошивка заблокирована до перезагрузки страницы.','Integrity failed. No blind retry. Recover via USB-ISP or your own verified dump over RCSP. Flashing locked until page reload.'],
+  needPC:['После readback активен TEST_MODE: сделайте power-cycle перед следующей OTA','TEST_MODE after readback: power-cycle before the next OTA'],
+  imgChanged:['Загружен другой образ — сверка невозможна','A different image is loaded — cannot verify'],
+  i_chunk:['CRC16 чанков (аки окон)','Chunk CRC16 (window acks)'],i_whole:['CRC16 файла (completion 0x20/0x1C)','Whole-file CRC16 (completion 0x20/0x1C)'],
+  i_jl:['Внутренние CRC JL-образа','Internal JL image CRCs'],i_boot:['Boot-маркер / имя / версия','Boot marker / name / version'],i_rb:['Readback / HASH_RANGE','Readback / HASH_RANGE']});

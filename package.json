@@ -1,0 +1,2 @@
+{"name":"badgeguard","version":"1.1.0","private":true,"type":"module","engines":{"node":">=18"},
+ "scripts":{"test":"node tests/run.mjs","build":"node build.mjs","check":"node tests/run.mjs && node build.mjs"}}

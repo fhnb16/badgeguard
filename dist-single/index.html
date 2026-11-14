@@ -1,0 +1,876 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; worker-src blob:; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>BadgeGuard — E87 OTA</title>
+
+<style>
+:root{--bg:#0B1220;--surf:#111A2E;--over:#1A2438;--line:#26355A;--text:#E6EDF7;--mute:#93A4C3;--cyan:#22D3EE;--mag:#E879F9;--ok:#4ADE80;--warn:#FBBF24;--bad:#F87171;--info:#60A5FA;
+--sans:Bahnschrift,"DIN Alternate","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;color-scheme:dark}
+[data-theme=light]{--bg:#EDF2F9;--surf:#FFF;--over:#E2E9F4;--line:#C3CFE3;--text:#0B1220;--mute:#475878;--cyan:#0E7490;--mag:#A21CAF;--ok:#15803D;--warn:#A16207;--bad:#B91C1C;--info:#1D4ED8;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--sans);padding:0 0 env(safe-area-inset-bottom,0)}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+*{scrollbar-color:var(--cyan) var(--surf)}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track{background:var(--surf)}::-webkit-scrollbar-thumb{background:var(--cyan);border-radius:5px}::-webkit-scrollbar-thumb:hover{background:var(--mag)}
+.mono{font-family:var(--mono);font-size:12.5px}
+h2,h3{margin:0;font-weight:600}
+.hdr{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:.6rem 1.2rem;align-items:center;padding:calc(.6rem + env(safe-area-inset-top,0)) 1rem .6rem;background:var(--surf);border-bottom:1px solid var(--line)}
+.hdr__brand{display:flex;gap:.5rem;align-items:center;color:var(--cyan);font-size:1.15rem;letter-spacing:.02em}
+.hdr__logo{width:26px;height:26px}
+.hdr__st{display:flex;gap:.4rem;align-items:center;color:var(--mute)}
+.hdr__dev{flex:1;min-width:8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hdr__act{display:flex;gap:.4rem;flex-wrap:wrap}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}.dot--on{background:var(--ok);box-shadow:0 0 8px var(--ok)}.dot--connecting{background:var(--warn)}
+.btn{font:inherit;font-size:.9rem;padding:.45rem .85rem;border-radius:6px;border:1px solid var(--line);background:var(--over);color:var(--text);cursor:pointer}
+.btn:hover:not(:disabled){border-color:var(--cyan)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn--pri{background:var(--cyan);color:#06222A;border-color:var(--cyan);font-weight:600}
+.btn--ota{background:linear-gradient(90deg,#22D3EE,#E879F9);color:#160A1F;border:0;font-weight:700;padding:.55rem 1.4rem}
+.btn--danger{border-color:var(--bad);color:var(--bad)}.btn--sq{width:2.3rem;padding:.45rem 0}.btn--s{padding:.2rem .6rem;font-size:.8rem}
+.banner{margin:0;padding:.7rem 1rem;border-left:4px solid}.banner--block{background:color-mix(in srgb,var(--bad) 14%,var(--surf));border-color:var(--bad)}
+.grid{display:grid;gap:1rem;padding:1rem;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
+@media (max-width:1100px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surf);border:1px solid var(--line);border-top:3px solid var(--cyan);border-radius:4px 4px 10px 10px;padding:1rem;display:flex;flex-direction:column;gap:.8rem;min-width:0}
+.panel--wide{grid-column:1/-1;border-top-color:var(--line)}
+.panel__h{display:flex;gap:.6rem;align-items:baseline;font-size:1.2rem}
+.panel__n{font-family:var(--mono);color:var(--cyan);font-size:1rem}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:.2rem .8rem;margin:0}
+.kv dt{color:var(--mute);font-family:var(--mono);font-size:12px;padding-top:2px}.kv dd{margin:0;overflow-wrap:anywhere;font-family:var(--mono);font-size:12.5px}
+.kv__empty{grid-column:1/-1;color:var(--mute)}
+.fold summary{cursor:pointer;color:var(--info)}
+.pre{margin:.4rem 0 0;max-height:14rem;overflow:auto;background:var(--over);padding:.5rem;border-radius:6px;white-space:pre}
+.row{display:flex;flex-wrap:wrap;gap:.4rem}
+.drop{display:block;border:2px dashed var(--line);border-radius:10px;padding:1.4rem 1rem;text-align:center;color:var(--mute);cursor:pointer}
+.drop:hover,.drop--over{border-color:var(--cyan);color:var(--text)}
+.seg{border:1px solid var(--line);border-radius:6px;display:flex;flex-wrap:wrap;gap:.3rem 1rem;padding:.3rem .7rem .5rem}.seg legend{color:var(--mute);font-size:.85rem}
+.sub{font-size:.85rem;color:var(--mute);display:flex;flex-wrap:wrap;gap:.4rem;align-items:center}.sub input{max-width:100%}
+.note{margin:0;font-size:.85rem;color:var(--warn)}
+.verdict{font-size:2rem;font-weight:700;letter-spacing:.06em;padding:.4rem .9rem;border-radius:8px;border:2px solid var(--line);color:var(--mute)}
+.verdict small{display:block;font-size:.8rem;font-weight:400;letter-spacing:0;color:var(--mute)}
+.verdict--ALLOW{color:var(--ok);border-color:var(--ok)}.verdict--WARN{color:var(--warn);border-color:var(--warn)}.verdict--BLOCK{color:var(--bad);border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent)}
+.rules{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.rule{display:grid;grid-template-columns:1.4rem 4.6rem minmax(0,1fr);gap:.4rem;padding:.3rem .4rem;background:var(--over);border-radius:4px;font-size:.88rem}
+.rule__ev{grid-column:3;font-family:var(--mono);font-size:11.5px;color:var(--mute);overflow-wrap:anywhere}
+.rule--pass .rule__i{color:var(--ok)}.rule--warn .rule__i{color:var(--warn)}.rule--block .rule__i{color:var(--bad)}
+.rule__id{font-family:var(--mono);font-size:12px}
+.warnbox{display:flex;flex-direction:column;gap:.4rem;padding:.6rem;border:1px solid var(--warn);border-radius:6px}
+.inp,.set input[type=number],.set select,.allow input,.allow select{font:inherit;padding:.4rem .5rem;border-radius:6px;border:1px solid var(--line);background:var(--over);color:var(--text);min-width:0}
+.chk{display:flex;gap:.5rem;align-items:center;cursor:pointer}
+.checks{list-style:none;margin:0;padding:0;font-size:.88rem}.checks li::before{content:attr(data-i);display:inline-block;width:1.4rem}
+.checks .ok::before{color:var(--ok)}.checks .no::before{color:var(--bad)}
+.ring{position:relative;width:min(100%,300px);aspect-ratio:1;margin:.3rem auto}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring__bezel{fill:#1F2A44;stroke:#2E3D63;stroke-width:6}.ring__track{fill:none;stroke:#0A1020;stroke-width:12}
+.ring__arc{fill:none;stroke:url(#g);stroke-width:12;stroke-linecap:round;stroke-dasharray:1024.2;stroke-dashoffset:1024.2;transition:stroke-dashoffset .3s}
+.ring__screen{fill:#05080F}
+.ring__txt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#E6EDF7;text-align:center;padding:22%}
+.ring__txt b{font-size:3rem;line-height:1;font-family:var(--mono)}.ring__txt span{color:#22D3EE}.ring__txt small{color:#93A4C3;font-size:10.5px}
+.ring--live svg{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{filter:drop-shadow(0 0 10px #E879F9)}}
+.logbar{display:flex;gap:.4rem;align-items:center}.logbar h3{flex:1;font-size:1rem}
+.log{list-style:none;margin:0;padding:.4rem;height:16rem;overflow:auto;background:var(--over);border-radius:6px}
+.log li{white-space:pre-wrap;overflow-wrap:anywhere}.log .tx{color:var(--cyan)}.log .rx{color:var(--mag)}.log .ev{color:var(--mute)}
+.set{display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:.6rem 1rem}
+.set label{display:flex;flex-direction:column;gap:.2rem;font-size:.85rem;color:var(--mute)}.set .chk{flex-direction:row;color:var(--text)}
+.set2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem}@media (max-width:800px){.set2{grid-template-columns:minmax(0,1fr)}}
+.set2 h3{font-size:1rem;margin-bottom:.4rem}
+.allow{display:flex;flex-wrap:wrap;gap:.4rem}.allow input{flex:1;min-width:12rem;font-family:var(--mono);font-size:12px}
+.lst{list-style:none;padding:0;margin:.4rem 0 0;font-size:12px}.lst li{display:flex;gap:.4rem;align-items:center;overflow-wrap:anywhere}
+.tests .ok{color:var(--ok)}.tests .no{color:var(--bad)}
+.toasts{position:fixed;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom,0));display:flex;flex-direction:column;gap:.4rem;z-index:9;max-width:min(26rem,calc(100vw - 2rem))}
+.toast{background:var(--over);border-left:4px solid var(--info);padding:.6rem .8rem;border-radius:6px;box-shadow:0 6px 20px #0008}
+.toast--ok{border-color:var(--ok)}.toast--warn{border-color:var(--warn)}.toast--block{border-color:var(--bad)}
+.dlg{background:var(--surf);color:var(--text);border:1px solid var(--warn);border-radius:10px;max-width:32rem}.dlg::backdrop{background:#000b}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.int{display:flex;flex-direction:column;gap:.5rem;border:1px solid var(--line);border-radius:8px;padding:.7rem}
+.int__head{display:flex;align-items:center;gap:.6rem}.int__head h3{flex:1;font-size:1rem}
+.lvl{font-family:var(--mono);font-size:.85rem;padding:.15rem .6rem;border-radius:999px;border:1px solid var(--line);color:var(--mute)}
+.lvl--verified{color:var(--ok);border-color:var(--ok)}.lvl--partial{color:var(--warn);border-color:var(--warn)}.lvl--failed{color:var(--bad);border-color:var(--bad)}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="hdr__brand"><svg class="hdr__logo" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="16" cy="16" r="6" fill="#E879F9"/></svg><b>BadgeGuard</b></div>
+  <div class="hdr__st" role="status"><span id="connDot" class="dot"></span><span id="connTxt"></span></div>
+  <div class="hdr__dev"><span id="hdrName">—</span> <span id="hdrBatt" class="mono"></span></div>
+  <div class="hdr__act">
+    <button id="btnConn" class="btn btn--pri"></button>
+    <button id="btnConnAll" class="btn" data-i18n="connAll"></button>
+    <button id="btnTheme" class="btn btn--sq" aria-label="Theme">◐</button>
+    <button id="btnLang" class="btn btn--sq"></button>
+  </div>
+</header>
+<p id="unsup" class="banner banner--block" hidden data-i18n="unsup"></p>
+<main class="grid">
+  <section class="panel">
+    <h2 class="panel__h"><span class="panel__n">1</span><span data-i18n="passport"></span></h2>
+    <dl id="passKv" class="kv"></dl>
+    <details class="fold"><summary data-i18n="gatt"></summary><pre id="gattPre" class="mono pre"></pre></details>
+    <div class="row"><button id="btnRescan" class="btn" data-i18n="rescan"></button><button id="btnExpPass" class="btn">passport.json</button><button id="btnCopyPass" class="btn" data-i18n="copy"></button></div>
+  </section>
+  <section class="panel">
+    <h2 class="panel__h"><span class="panel__n">2</span><span data-i18n="image"></span></h2>
+    <label id="drop" class="drop" tabindex="0"><input id="fileImg" type="file" accept=".ufw,.bin" hidden><span data-i18n="drop"></span></label>
+    <fieldset class="seg"><legend data-i18n="path"></legend>
+      <label><input type="radio" name="path" value="qix" checked> Qix FD00 / 0xC0</label>
+      <label><input type="radio" name="path" value="rcsp"> RCSP AE00 (restore, v1.1)</label>
+    </fieldset>
+    <label class="sub"><span data-i18n="dumpCert"></span><input id="fileCert" type="file" accept=".json"></label>
+    <div class="row"><button id="btnCertWired" class="btn btn--s" data-i18n="certWired"></button></div>
+    <p id="heur" class="note" hidden data-i18n="heur"></p>
+    <dl id="imgKv" class="kv"></dl>
+    <div id="verdict" class="verdict" aria-live="polite"></div>
+    <ul id="rules" class="rules"></ul>
+    <div id="warnBox" class="warnbox" hidden>
+      <input id="phrase" class="inp" autocomplete="off" data-i18n-ph="phrasePh">
+      <label class="chk"><input id="riskAck" type="checkbox"><span data-i18n="risk"></span></label>
+    </div>
+  </section>
+  <section class="panel">
+    <h2 class="panel__h"><span class="panel__n">3</span><span data-i18n="flash"></span></h2>
+    <ul id="checks" class="checks"></ul>
+    <label class="chk"><input id="phoneBt" type="checkbox"><span data-i18n="phoneBt"></span></label>
+    <div id="ring" class="ring" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="OTA">
+      <svg viewBox="0 0 360 360" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22D3EE"/><stop offset="1" stop-color="#E879F9"/></linearGradient></defs>
+        <circle cx="180" cy="180" r="176" class="ring__bezel"/><circle cx="180" cy="180" r="163" class="ring__track"/><circle id="ringArc" cx="180" cy="180" r="163" class="ring__arc"/><circle cx="180" cy="180" r="148" class="ring__screen"/></svg>
+      <div class="ring__txt"><b id="ringPct">0%</b><span id="ringPhase" aria-live="polite">idle</span><small id="ringSub" class="mono"></small></div>
+    </div>
+    <div class="row">
+      <button id="btnFlash" class="btn btn--ota" disabled data-i18n="btnFlash"></button>
+      <button id="btnAbort" class="btn btn--danger" disabled data-i18n="abort"></button>
+      <button id="btnProbe" class="btn" disabled data-i18n="probe"></button>
+      <button id="btnPC" class="btn" data-i18n="pcycle"></button>
+      <button id="btnReport" class="btn" disabled>flash-report.json</button>
+    </div>
+    <div class="int" aria-live="polite">
+      <div class="int__head"><h3 data-i18n="integrity"></h3><span id="intBadge" class="lvl">—</span></div>
+      <ul id="intChecks" class="rules"></ul>
+      <dl id="intDig" class="kv"></dl>
+      <div class="row">
+        <button id="btnRb" class="btn btn--s" data-i18n="rbL1"></button><button id="btnRh" class="btn btn--s" data-i18n="rhL2"></button>
+        <button id="btnAccept" class="btn btn--s" hidden data-i18n="acceptPartial"></button><button id="btnCopyDig" class="btn btn--s" data-i18n="copyDig"></button>
+        <button id="btnDump" class="btn btn--s" data-i18n="takeDump"></button><button id="btnSpot" class="btn btn--s" data-i18n="spot"></button>
+        <button id="btnExpCert" class="btn btn--s">dump.cert.json</button><button id="btnExpInt" class="btn btn--s">integrity-report.json</button>
+      </div>
+      <details class="fold"><summary data-i18n="certView"></summary><pre id="certPre" class="mono pre"></pre></details>
+    </div>
+    <div class="logbar"><h3 data-i18n="log"></h3><button id="btnCopyLog" class="btn btn--s" data-i18n="copy"></button><button id="btnDlLog" class="btn btn--s">session.log</button></div>
+    <ol id="log" class="log mono" tabindex="0" aria-label="log"></ol>
+  </section>
+  <section class="panel panel--wide">
+    <h2 class="panel__h"><span class="panel__n">⚙</span><span data-i18n="settings"></span></h2>
+    <div class="set">
+      <label><span data-i18n="s_connTo"></span><input type="number" data-set="connectTo" min="3000" max="60000" step="500"></label>
+      <label><span data-i18n="s_reqTo"></span><input type="number" data-set="reqTo" min="500" max="30000" step="100"></label>
+      <label><span data-i18n="s_winTo"></span><input type="number" data-set="winTo" min="1000" max="60000" step="500"></label>
+      <label><span data-i18n="s_chunk"></span><input type="number" data-set="chunk" min="16" max="490"></label>
+      <label><span data-i18n="s_win"></span><input type="number" data-set="win" min="1" max="16"></label>
+      <label><span data-i18n="s_retries"></span><input type="number" data-set="retries" min="0" max="10"></label>
+      <label><span data-i18n="s_theme"></span><select data-set="theme"><option value="dark" data-i18n="dark"></option><option value="light" data-i18n="light"></option></select></label>
+      <label><span data-i18n="s_lang"></span><select data-set="lang"><option value="ru">Русский</option><option value="en">English</option></select></label>
+      <label class="chk"><input type="checkbox" data-set="expert"><span data-i18n="s_expert"></span></label>
+      <label class="chk"><input type="checkbox" data-set="chime"><span data-i18n="s_chime"></span></label>
+      <label class="chk"><input type="checkbox" data-set="readbackOffer"><span data-i18n="s_rbOffer"></span></label>
+      <label><span data-i18n="s_spotN"></span><input type="number" data-set="spotN" min="4" max="64"></label>
+      <label><span data-i18n="s_span"></span><input type="text" data-set="verifySpan" class="inp" spellcheck="false"></label>
+      <label><span data-i18n="s_hashTo"></span><input type="number" data-set="hashTo" min="5000" max="120000" step="1000"></label>
+    </div>
+    <div class="set2">
+      <div>
+        <h3 data-i18n="allow"></h3>
+        <div class="allow"><select id="alType"><option value="image">image</option><option value="uboot">uboot</option></select><input id="alHash" placeholder="sha256 (64 hex)" spellcheck="false"><button id="alAdd" class="btn" data-i18n="add"></button></div>
+        <ul id="alList" class="lst"></ul>
+        <div class="row" style="margin-top:.6rem"><label class="btn"><span data-i18n="impProf"></span><input id="fileProf" type="file" accept=".json" hidden></label><button id="btnExpProf" class="btn" data-i18n="expProf"></button><button id="btnReset" class="btn btn--danger" data-i18n="reset"></button></div>
+      </div>
+      <div><h3 data-i18n="tests"></h3><ul id="tests" class="lst tests"></ul></div>
+    </div>
+  </section>
+</main>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<dialog id="disc" class="dlg"><h2 data-i18n="discT"></h2><p data-i18n="discB"></p><button id="btnDisc" class="btn btn--pri" data-i18n="accept"></button></dialog>
+
+<script>
+'use strict';
+/* ---- src/core/core.js ---- */
+const crc16=(b,c=0)=>{for(let i=0;i<b.length;i++){c^=b[i]<<8;for(let j=0;j<8;j++)c=(c&0x8000?(c<<1)^0x1021:c<<1)&0xFFFF}return c};
+const hex=(u,sep=' ')=>Array.from(u||[],x=>x.toString(16).padStart(2,'0')).join(sep).toUpperCase();
+const fromHex=s=>Uint8Array.from(s.replace(/[^0-9a-f]/gi,'').match(/../g)||[],h=>parseInt(h,16));
+const hx=n=>n==null?'—':'0x'+n.toString(16).toUpperCase();
+const eq=(a,b)=>!!a&&!!b&&a.length===b.length&&a.every((x,i)=>x===b[i]);
+
+const PROFILES={
+  'e87-ac707n':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE']},family:'AC707N/BR35',ota:true,chipkey:0x9847,
+    flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},ubootSha256Allowlist:[],knownGoodImages:[],expectedForm:null,verifySpan:[0,0xFC000]},
+  'e87-ac697x':{match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC697x/BR30',ota:false},
+  'e87-ac701n':{match:{sdkRegex:'jl_sdk_ac701',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC701N/BR28',ota:false}};
+const familyOf=s=>/ac707/.test(s||'')?'AC707N/BR35':/ac697/.test(s||'')?'AC697x/BR30':/ac701/.test(s||'')?'AC701N/BR28':'unknown';
+function matchProfile(P,profiles){
+  for(const[id,p]of Object.entries(profiles)){const m=p.match;
+    if(P.sdkString&&new RegExp(m.sdkRegex).test(P.sdkString)&&m.gattServices.every(s=>P.gatt.services.some(u=>u.startsWith(s)||u.startsWith('0000'+s)))&&m.names.some(n=>(P.name||'').startsWith(n)))return id}
+  return null}
+const profileForSdk=(sdk,profiles)=>sdk?Object.keys(profiles).find(id=>new RegExp(profiles[id].match.sdkRegex).test(sdk))||null:null;
+// >0 upgrade, 0 same, <0 downgrade, null = unknown / different line
+function vcmp(a,b){if(!a||!b)return null;const x=a.split('.').map(Number),y=b.split('.').map(Number);if(x[0]!==y[0]||x[1]!==y[1])return null;
+  for(let i=2;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return Math.sign(d)}return 0}
+
+const RULE_TXT={
+  'R-CHIP':['Семейство чипа устройства = цель образа','Device chip family = image target'],
+  'R-KEY':['chipkey образа = chipkey профиля','Image chipkey = profile chipkey'],
+  'R-UBOOT':['uboot образа — OEM из allowlist (байт-в-байт)','Image uboot is allowlisted OEM (byte-exact)'],
+  'R-WRAP':['Обёртка соответствует пути (Qix → bcaf, RCSP → vanilla)','Wrapper matches path (Qix → bcaf, RCSP → vanilla)'],
+  'R-CRC':['Все CRC контейнера и Qix валидны','All container and Qix CRCs valid'],
+  'R-SIZE':['app.bin ≤ appSlot, образ ≤ лимита','app.bin ≤ appSlot, image within limit'],
+  'R-GEOM':['Геометрия флеша образа = профиль','Image flash geometry = profile'],
+  'R-PATH':['OTA-путь доступен на устройстве и в приложении','OTA path available on device and in app'],
+  'R-BATT':['Батарея ≥ 30% или зарядка','Battery ≥ 30% or charging'],
+  'R-TEST':['TEST_MODE не активен, dump в сессии не было','TEST_MODE inactive, no dump this session'],
+  'R-CONN':['Одно соединение, GATT жив, BT телефона выключен','Single link, GATT alive, phone BT off'],
+  'R-DUMP':['Дамп — только свой (паспорт сертификата = устройство) и только через RCSP. Чужой дамп клонирует MAC и имя.','Own dump only (certificate passport = device), RCSP path only. A foreign dump clones MAC and name.'],
+  'R-VER':['Без даунгрейда в одной линейке версий','No downgrade within a version line'],
+  'R-HASH':['SHA-256 в known-good allowlist','SHA-256 in known-good allowlist'],
+  'R-PROBE':['Не было probe без power-cycle','No probe without power-cycle'],
+  'R-FORM':['Digest сравнивается в одной форме (срез flash.bin / калибровка профиля)','Digests compared in one form (flash.bin slice / profile calibration)'],
+  'R-DUMP-INTEG':['Restore только из дампа с verified-сертификатом, подписью и совпадающим SHA-256','Restore only from a dump with a verified, signed certificate and matching SHA-256']};
+
+function evaluate(P,R,c){
+  const rules=[],L=c.lang==='en'?1:0,add=(id,severity,evidence)=>rules.push({id,severity,message:RULE_TXT[id][L],evidence});
+  const pr=c.profiles[P.profileId],geo=pr&&pr.flash,qix=c.path==='qix',g=R.geometry,b=P.battery;
+  add('R-CHIP',pr&&P.chipFamily!=='unknown'&&pr.family===P.chipFamily&&R.targetProfileId===P.profileId?'pass':'block',`dev=${P.profileId||'?'} ${P.chipFamily} / img=${R.targetProfileId||'?'}`);
+  add('R-KEY',pr&&pr.chipkey!=null&&R.chipkey===pr.chipkey?'pass':'block',`img=${hx(R.chipkey)} exp=${hx(pr&&pr.chipkey)}`);
+  const ub=[...((pr&&pr.ubootSha256Allowlist)||[]),...c.ubootAllow];
+  add('R-UBOOT',R.ubootHash&&ub.includes(R.ubootHash)?'pass':'block',`uboot=${R.ubootHash?R.ubootHash.slice(0,16)+'…':'—'} allowlist=${ub.length}`);
+  add('R-WRAP',(qix?R.qixWrapped===true:R.qixWrapped===false)?'pass':'block',`path=${c.path} bcaf=${R.qixWrapped}`);
+  add('R-CRC',['hdr','list','data'].every(k=>R.crc[k]===true)&&(!R.qixWrapped||R.crc.qix===true)&&R.internalJlCrcOk===true?'pass':'block',JSON.stringify(R.crc)+' jl='+R.internalJlCrcOk);
+  add('R-SIZE',geo&&R.appBinSize!=null&&R.appBinSize<=geo.appSlot&&R.size<=c.maxImage?'pass':'block',`app=${hx(R.appBinSize)} slot=${hx(geo&&geo.appSlot)} file=${R.size}`);
+  add('R-GEOM',geo&&g&&g.flashSize===geo.size&&g.appSlot===geo.appSlot&&g.codeSpan[0]===geo.codeSpan[0]&&g.codeSpan[1]===geo.codeSpan[1]?'pass':'block',g?`flash=${hx(g.flashSize)} code=[${g.codeSpan.map(hx)}] slot=${hx(g.appSlot)}`:'—');
+  const fm=pr&&pr.expectedForm,sl=R.slices||{};
+  add('R-FORM',(fm==='on-flash'?sl.onflash:fm==='plaintext'?sl.plain:sl.onflash&&sl.plain)?'pass':'block',`form=${fm||'uncalibrated'} onflash=${!!sl.onflash} plain=${!!sl.plain}`);
+  const tr=qix?c.qixReady:c.rcspReady;
+  add('R-PATH',pr&&pr.ota&&tr&&(qix?P.capabilities.qixFd00:P.capabilities.rcspOta)?'pass':'block',`profileOta=${!!(pr&&pr.ota)} fd00=${P.capabilities.qixFd00} transport=${tr}`);
+  add('R-BATT',b.level!=null&&(b.level>=30||b.charging===true)?'pass':'block',`${b.level==null?'—':b.level}% charging=${b.charging}`);
+  add('R-TEST',!c.flags.testMode&&!c.flags.dump&&!P.testModeSuspected?'pass':'block',`test=${c.flags.testMode||P.testModeSuspected} dump=${c.flags.dump}`);
+  add('R-CONN',c.connected&&c.phoneBtOff?'pass':'block',`gatt=${c.connected} phoneBtOff=${c.phoneBtOff}`);
+  const dump=R.kind==='full-dump'||R.containsKeyMac,dc=c.dumpCert,dp=dc&&dc.passport,own=dump&&dp&&dp.deviceId===P.deviceId;
+  add('R-DUMP',!dump?'pass':own&&!qix?'warn':'block',dump?`cert.passport=${dp?dp.deviceId:'—'} device=${P.deviceId} path=${c.path}`:'no dump');
+  add('R-DUMP-INTEG',!dump||dc&&dc.verified===true&&dc.sigOk===true&&dc.dumpSha256===R.sha256?'pass':'block',dump?(dc?`verified=${dc.verified} sig=${dc.sigOk} sha=${dc.dumpSha256===R.sha256}`:'no certificate'):'no dump');
+  const v=vcmp(R.version,P.fwVersion);
+  add('R-VER',v==null||v<0?'warn':'pass',`${P.fwVersion||'—'} → ${R.version||'—'}`);
+  const kg=[...((pr&&pr.knownGoodImages)||[]).map(x=>x.sha256),...c.imageAllow];
+  add('R-HASH',kg.includes(R.sha256)?'pass':'warn',(R.sha256||'').slice(0,16)+'…');
+  add('R-PROBE',c.flags.probe?'block':'pass',`probe=${c.flags.probe}`);
+  return{overall:rules.some(r=>r.severity==='block')?'BLOCK':rules.some(r=>r.severity==='warn')?'WARN':'ALLOW',rules}}
+
+function fixture(){
+  const P={deviceId:'dev',name:'EC-BADGE',chipFamily:'AC707N/BR35',sdkString:'jl_sdk_ac707_publish',fwVersion:'2.711.1.0.3',battery:{level:80,charging:false},capabilities:{qixFd00:true,rcspOta:true},profileId:'e87-ac707n',testModeSuspected:false,gatt:{services:[]}};
+  const R={size:0x90000,sha256:'h',kind:'fw-custom',qixWrapped:true,chipkey:0x9847,targetProfileId:'e87-ac707n',ubootHash:'u',appBinSize:0x80000,crc:{hdr:true,list:true,data:true,qix:true},version:'2.711.1.0.4',geometry:{flashSize:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},containsKeyMac:false,internalJlCrcOk:true,slices:{onflash:'a',plain:'b'}};
+  const c={path:'qix',lang:'ru',profiles:PROFILES,ubootAllow:['u'],imageAllow:['h'],maxImage:16<<20,qixReady:true,rcspReady:true,connected:true,phoneBtOff:true,flags:{testMode:false,dump:false,probe:false},dumpCert:null};
+  return{P,R,c}}
+const NEG={'R-CHIP':f=>f.R.targetProfileId='e87-ac701n','R-KEY':f=>f.R.chipkey=0x1234,'R-UBOOT':f=>f.R.ubootHash='native','R-WRAP':f=>f.R.qixWrapped=false,
+  'R-CRC':f=>f.R.crc.data=false,'R-SIZE':f=>f.R.appBinSize=0x200000,'R-GEOM':f=>f.R.geometry.appSlot=1,'R-PATH':f=>f.P.capabilities.qixFd00=false,
+  'R-BATT':f=>f.P.battery.level=10,'R-TEST':f=>f.c.flags.testMode=true,'R-CONN':f=>f.c.phoneBtOff=false,'R-DUMP':f=>f.R.containsKeyMac=true,
+  'R-VER':f=>f.R.version='2.711.1.0.1','R-HASH':f=>f.R.sha256='x','R-PROBE':f=>f.c.flags.probe=true,'R-FORM':f=>f.R.slices.plain=null,'R-DUMP-INTEG':f=>f.R.kind='full-dump'};
+function selfTest(){
+  const out=[],ok=(n,v)=>out.push({n,ok:!!v});
+  ok('CRC-16/XMODEM "123456789" = 0x31C3',crc16(new TextEncoder().encode('123456789'))===0x31C3);
+  let f=fixture();ok('rules: reference → ALLOW',evaluate(f.P,f.R,f.c).overall==='ALLOW');
+  const sevOf=(f,id)=>evaluate(f.P,f.R,f.c).rules.find(r=>r.id===id).severity;
+  f=fixture();f.R.internalJlCrcOk=null;ok('R-CRC: internal JL CRC unknown → BLOCK',sevOf(f,'R-CRC')==='block');
+  f=fixture();f.c.profiles={...PROFILES,'e87-ac707n':{...PROFILES['e87-ac707n'],expectedForm:'on-flash'}};f.R.slices.plain=null;
+  ok('R-FORM: calibrated on-flash + flash.bin slice → pass',sevOf(f,'R-FORM')==='pass');
+  f.R.slices={onflash:null,plain:'b'};ok('R-FORM: on-flash profile + app.bin only → BLOCK',sevOf(f,'R-FORM')==='block');
+  f=fixture();f.P.battery={level:10,charging:true};ok('R-BATT: <30% + charging → pass',evaluate(f.P,f.R,f.c).overall==='ALLOW');
+  for(const[id,mut]of Object.entries(NEG)){f=fixture();mut(f);const v=evaluate(f.P,f.R,f.c);ok(`${id} → ${v.overall}`,v.rules.find(r=>r.id===id).severity!=='pass'&&v.overall!=='ALLOW')}
+  f=fixture();Object.assign(f.R,{kind:'full-dump',containsKeyMac:true,qixWrapped:false});f.c.path='rcsp';const cert={passport:{deviceId:'dev'},verified:true,sigOk:true,dumpSha256:'h'};
+  f.c.dumpCert=cert;ok('R-DUMP: own verified dump + RCSP → WARN',sevOf(f,'R-DUMP')==='warn'&&sevOf(f,'R-DUMP-INTEG')==='pass');
+  f.c.dumpCert={...cert,verified:false};ok('R-DUMP-INTEG: unverified certificate → BLOCK',sevOf(f,'R-DUMP-INTEG')==='block');
+  f.c.dumpCert={...cert,sigOk:false};ok('R-DUMP-INTEG: bad signature → BLOCK',sevOf(f,'R-DUMP-INTEG')==='block');
+  f.c.dumpCert={...cert,dumpSha256:'other'};ok('R-DUMP-INTEG: certificate of another file → BLOCK',sevOf(f,'R-DUMP-INTEG')==='block');
+  f.c.dumpCert={...cert,passport:{deviceId:'other'}};ok('R-DUMP: foreign dump → BLOCK',evaluate(f.P,f.R,f.c).overall==='BLOCK');
+  return out}
+
+/* ---- src/protocol/hash.js ---- */
+/* ===== protocol/hash: CAPS 0xD7 + HASH_RANGE 0xD5 на FD00 (Дополнение №1 §6) ===== */
+// io.req(char, bytes, pred, note, ms) → {k,u}; в приложении — req() из transport, в тестах — мок
+const CAPS={HASH_RANGE:1,RAW_FLASH:2,ASYNC_HASH:4};
+const HASH_ERR={1:'E-INT-008 busy',2:'E-INT-007 unsupported',3:'E-INT-006 bad range',4:'E-INT-008 device timeout'};
+function buildHashReq(addr,len,algo=1){const b=new Uint8Array(10),d=new DataView(b.buffer);b[0]=0xD5;d.setUint32(1,addr);d.setUint32(5,len);b[9]=algo;return b}
+// RESP: D5 | status | algo | digest[32] | crc16(status..digest, BE16)
+function parseHashResp(u){
+  if(u[0]!==0xD5||u.length<37)throw new Error('E-INT-006 bad response');
+  if(u[1])throw new Error(HASH_ERR[u[1]]||'E-INT-006 status '+u[1]);
+  if(u[2]!==1)throw new Error('E-INT-006 algo '+u[2]);
+  if(crc16(u.subarray(1,35))!==((u[35]<<8)|u[36]))throw new Error('E-INT-006 response CRC');
+  return hex(u.subarray(3,35),'').toLowerCase()}
+// нет Caps / нет ответа → 0: штатная деградация до L1/L0, не ошибка
+async function readCaps(io,ms){try{const r=await io.req('fd00',[0xD7],(k,u)=>k==='fd00'&&u[0]===0xD7,'CAPS',ms);
+  return r.u.length>=6&&r.u[1]===0?new DataView(r.u.buffer,r.u.byteOffset).getUint32(2):0}catch{return 0}}
+async function hashRange(io,addr,len,flashSize,ms){
+  if(len<=0||len>0x400000||addr+len>flashSize)throw new Error('E-INT-006 bad range');
+  let r;try{r=await io.req('fd00',buildHashReq(addr,len),(k,u)=>k==='fd00'&&u[0]===0xD5,`HASH_RANGE ${hx(addr)}+${hx(len)}`,ms)}
+  catch(e){throw new Error('E-INT-008 '+e.message)}
+  return parseHashResp(r.u)}
+
+/* ---- src/integrity/core.js ---- */
+/* ===== integrity/core: формы, срезы, L0/L1/L2, валидатор дампа (чистые функции) ===== */
+const sha256hex=async u=>hex(new Uint8Array(await crypto.subtle.digest('SHA-256',u)),'').toLowerCase();
+function parseSpan(s){const m=String(s).trim().match(/^(0x[0-9a-f]+|\d+)\s*[:-]\s*(0x[0-9a-f]+|\d+)$/i);if(!m)return null;const a=Number(m[1]),b=Number(m[2]);return a>=0&&b>a?[a,b]:null}
+// shortcut: за пределами образа считаем 0xFF (стёртый NOR); подтверждается калибровкой §8.5 на HIL
+function spanSlice(u,[a,b]){const o=new Uint8Array(b-a).fill(0xFF);if(a<u.length)o.set(u.subarray(a,Math.min(b,u.length)));return o}
+
+// R-FORM: digest сравнивается только с кандидатом одной формы
+function compareForm(d,c,form){
+  if(form){const exp=form==='on-flash'?c.onflash:c.plain;if(!exp)return{match:false,expected:null,form,code:'E-INT-005'};
+    return{match:d===exp,expected:exp,form,code:d===exp?null:'E-INT-006'}}
+  if(c.onflash&&d===c.onflash)return{match:true,expected:d,form:'on-flash'};
+  if(c.plain&&d===c.plain)return{match:true,expected:d,form:'plaintext'};
+  return{match:false,expected:c.onflash||c.plain||null,form:null,code:'E-INT-006'}}
+const l0ok=r=>r.chunkCrc.fail===0&&r.chunkCrc.ok>0&&r.wholeFileCrc16.ok===true&&r.bootMarker.ok===true;
+
+// e: {l0, span, cands:{onflash,plain}, form, caps(), hash(addr,len), readback(addr,len)|null, sha(u8), onCalibrate(form)}
+async function verifyFlash(e){
+  const len=e.span[1]-e.span[0];
+  const rep={level:'L0',...e.l0,codeSliceSha256:(e.form==='plaintext'?e.cands.plain:e.cands.onflash)||e.cands.plain||null,readback:{method:'none'},verdict:'partial',errors:[]};
+  if(!l0ok(rep)){rep.verdict='failed';rep.errors.push('L0');return rep}
+  let digest=null,method='none',caps=0;
+  try{caps=await e.caps()}catch{}
+  if(caps&CAPS.HASH_RANGE){try{digest=await e.hash(e.span[0],len);method='hash-cmd'}catch(x){rep.errors.push(x.message)}}
+  if(!digest&&e.readback){try{digest=await e.sha(await e.readback(e.span[0],len));method='ble-dump'}catch(x){rep.errors.push(x.message)}}
+  if(!digest)return rep; // partial: только L0
+  rep.level=method==='hash-cmd'?'L2':'L1';
+  const m=compareForm(digest,e.cands,e.form);
+  rep.readback={method,digest,expected:m.expected,match:m.match,formUsed:m.form,ranges:[{addr:e.span[0],len,ok:m.match}]};
+  if(m.match){if(!e.form)e.onCalibrate(m.form);rep.verdict='verified'}else{rep.verdict='failed';rep.errors.push(m.code)}
+  return rep}
+
+// §8.1 → DumpCertificate (без подписи). io: {sha, reRead?, decrypt?, parseHeader?, verifyCrcs?, layoutOk?, spotN?, rand?}
+async function validateDump(buf,passport,profile,method,io){
+  const size=profile.flash.size,errors=[],checks={sizeOk:buf.length===size,decryptOk:false,internalCrcOk:false,geomOk:false};
+  if(!checks.sizeOk)errors.push('E-INT-001');
+  const dumpSha256=await io.sha(buf);
+  if(method==='ble-testmode'){checks.spotOk=false;
+    if(io.reRead&&checks.sizeOk){const B=4096,rnd=io.rand||Math.random,rs=[0,size-B];
+      for(let i=0;i<(io.spotN||16);i++)rs.push(Math.floor(rnd()*(size/B))*B);
+      checks.spotOk=true;for(const a of rs)if(!eq(await io.reRead(a,B),buf.subarray(a,a+B))){checks.spotOk=false;errors.push('E-INT-002 @'+hx(a));break}}}
+  try{const code=io.decrypt?await io.decrypt(buf.subarray(0,profile.flash.appSlot)):null;
+    checks.decryptOk=!!code&&!!(await io.parseHeader(code));checks.internalCrcOk=checks.decryptOk&&!!(await io.verifyCrcs(code));
+    if(!checks.decryptOk)errors.push('E-INT-004');else if(!checks.internalCrcOk)errors.push('E-INT-003')}
+  catch(x){errors.push('E-INT-004 '+x.message)}
+  checks.geomOk=checks.sizeOk&&!!(io.layoutOk&&await io.layoutOk(buf,profile));
+  const verified=checks.sizeOk&&checks.decryptOk&&checks.internalCrcOk&&checks.geomOk&&(method==='wired-uboot'||checks.spotOk===true);
+  return{dumpSha256,size:buf.length,method,passport,checks,verified,errors,createdAt:new Date().toISOString()}}
+
+async function asyncSelfTest(){
+  const out=[],ok=(n,v)=>out.push({n,ok:!!v}),enc=s=>new TextEncoder().encode(s),has=(r,c)=>r.errors.some(x=>x.startsWith(c));
+  ok('SHA-256 "abc"',await sha256hex(enc('abc'))==='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  ok('SHA-256 ""',await sha256hex(new Uint8Array(0))==='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+  const onf=Uint8Array.from({length:64},(_,i)=>i^0x5A),pl=Uint8Array.from({length:40},(_,i)=>i),span=[0,64];
+  const c={onflash:await sha256hex(spanSlice(onf,span)),plain:await sha256hex(spanSlice(pl,span))};
+  ok('R-FORM: plaintext digest ≠ on-flash digest',c.onflash!==c.plain);
+  ok('R-FORM: on-flash profile rejects plaintext digest',!compareForm(c.plain,c,'on-flash').match);
+  ok('R-FORM: missing slice of profile form → E-INT-005',compareForm(c.onflash,{plain:c.plain},'on-flash').code==='E-INT-005');
+  const L0={imageSha256:'h',chunkCrc:{ok:10,fail:0},wholeFileCrc16:{value:1,ok:true},ufwCrc:{},internalJlCrcOk:true,bootMarker:{ok:true,value:null},nameChanged:true,versionBefore:null,versionAfter:null};
+  const resp=(st,d)=>{const u=new Uint8Array(37);u[0]=0xD5;u[1]=st;u[2]=1;if(d)u.set(fromHex(d),3);const x=crc16(u.subarray(1,35));u[35]=x>>8;u[36]=x&255;return u};
+  const io=h=>({req:async(k,b)=>{const r=h(Uint8Array.from(b));if(!r)throw new Error('timeout');return{k,u:r}}});
+  const dev=(d,st=0)=>io(b=>b[0]===0xD7?Uint8Array.of(0xD7,0,0,0,0,CAPS.HASH_RANGE):b[0]===0xD5&&st>=0?resp(st,d):null);
+  const run=(D,o={})=>verifyFlash({l0:o.l0||L0,span,cands:c,form:o.form??null,caps:()=>readCaps(D,50),hash:(a,l)=>hashRange(D,a,l,0x400000,50),
+    readback:o.rb||null,sha:sha256hex,onCalibrate:o.cal||(()=>{})});
+  let r=await run(dev(c.onflash),{form:'on-flash'});ok('L2: HASH_RANGE match → verified',r.level==='L2'&&r.verdict==='verified');
+  r=await run(dev('00'.repeat(32)));ok('L2: mismatch → failed E-INT-006',r.verdict==='failed'&&has(r,'E-INT-006'));
+  let cal=null;r=await run(dev(c.plain),{cal:f=>cal=f});ok('calibration: plaintext form recorded',r.verdict==='verified'&&cal==='plaintext');
+  r=await run(dev(null,2),{rb:async()=>spanSlice(onf,span)});ok('unsupported → E-INT-007 → fallback L1 verified',r.level==='L1'&&r.verdict==='verified'&&has(r,'E-INT-007'));
+  r=await run(dev(null,-1));ok('HASH_RANGE timeout → E-INT-008 → partial',r.verdict==='partial'&&has(r,'E-INT-008'));
+  r=await run(io(()=>null));ok('no Caps, no readback → L0 partial',r.level==='L0'&&r.verdict==='partial');
+  r=await run(dev(c.onflash),{l0:{...L0,chunkCrc:{ok:9,fail:1}}});ok('L0: chunk CRC fail → failed',r.verdict==='failed');
+  const bad=resp(0,c.onflash);bad[36]^=1;let thrown=false;try{parseHashResp(bad)}catch{thrown=true}ok('HASH_RANGE: response CRC checked',thrown);
+  const prof={flash:{size:0x10000,appSlot:0x8000}},dump=Uint8Array.from({length:0x10000},(_,i)=>i*7&255),pp={deviceId:'dev'},
+    jl={decrypt:async x=>x,parseHeader:async()=>true,verifyCrcs:async()=>true,layoutOk:async()=>true,sha:sha256hex,spotN:8,rand:()=>.5};
+  let ct=await validateDump(dump,pp,prof,'ble-testmode',{...jl,reRead:async(a,l)=>dump.slice(a,a+l)});ok('dump: BLE + spot-check clean → verified',ct.verified&&ct.checks.spotOk);
+  ct=await validateDump(dump,pp,prof,'ble-testmode',{...jl,reRead:async(a,l)=>{const x=dump.slice(a,a+l);if(!a)x[100]^=4;return x}});
+  ok('dump: bit-flip → E-INT-002, not verified',!ct.verified&&ct.errors.some(e=>e.startsWith('E-INT-002')));
+  ct=await validateDump(dump.subarray(0,0x8000),pp,prof,'wired-uboot',jl);ok('dump: size mismatch → E-INT-001',!ct.verified&&ct.errors.includes('E-INT-001'));
+  ct=await validateDump(dump,pp,prof,'wired-uboot',{...jl,verifyCrcs:async()=>false});ok('dump: internal JL CRC fail → E-INT-003',!ct.verified&&ct.errors.includes('E-INT-003'));
+  ct=await validateDump(dump,pp,prof,'wired-uboot',{sha:sha256hex});ok('dump: no JL port → not verified (fail-closed)',!ct.verified);
+  return out}
+
+/* ---- src/adapters/ports.js ---- */
+/* ===== ADAPTERS — wire-детали портируются из референсов (ТЗ §14), не выдумываются. Без порта → fail-closed. ===== */
+/* PORT: jl-auth (auracast jl-auth.ts / e87_badge jieli_auth.py)
+   AUTH.encrypt = (data: Uint8Array(16), prof: {key: Uint8Array, magic: Uint8Array}) => Uint8Array(16)
+   Профиль активен только если его тест-вектор проходит (для A впишите vector). */
+const AUTH={encrypt:null,ok:{A:false,B:false},profiles:{
+  A:{key:'6BE9B2C083D94A1E5AF89C4E7B6D3F20',magic:'B3A1D7E94C2F8560',vector:null},
+  B:{key:'06775F87918DD423005DF1D8CF0C142B',magic:'112233332211',vector:['70B75992E05EA78FEC533BA12979B590','FFE9E6C80CE1F40F5CCEAE20831C5879']}}};
+/* PORT: ufw (jieli-ble-badge-research ufw-repack/jltech)
+   UFW.parse = async (u8, base) => ({kind, chipkey, ubootHash(sha256 hex lower), appBinSize, crc:{hdr,list,data,qix}, geometry:{flashSize,codeSpan,appSlot}, version}) */
+const UFW={parse:null};
+/* PORT: qix-ble + ROBUSTNESS.md. ctx = {w, req, waitFor, set, log, image, report, passport}
+   begin(ctx) — 0xC0 REQ_UPDATE на FD00 + negotiation, отказ → throw
+   sendWindow(ctx,{offset,chunks:[{off,data,crc}]}) — окно + ожидание ack
+   resume(ctx,offset) — продолжение после reconnect БЕЗ повторного 0xC0
+   apply(ctx), probe(ctx) — probe: только negotiation, 0 записей; abort(ctx) — опционально
+   ready=true только после порта и HIL-проверки. */
+const QIX={ready:false,begin:null,sendWindow:null,resume:null,apply:null,probe:null,abort:null};
+const RCSP_READY=false; // v1.1: vanilla RCSP restore
+
+/* PORT: readback (qix dump --type flash / TEST_GET_*; нужен auth+bootstrap, SET_TEST_MODE 0xA0)
+   READBACK.dumpRange(ctx, addr, len, onProgress(doneBytes)) => Uint8Array(len), on-flash форма. Ставит TEST_MODE. */
+const READBACK={ready:false,dumpRange:null};
+/* PORT: jl-flash-decrypt + JL CRC (jieli-ble-badge-research)
+   JL.decrypt(code) => Uint8Array (descrambled CODE) · JL.parseHeader(code) => bool
+   JL.verifyCrcs(code) => bool (app_area_head, dcrc/listcrc/hdrcrc) · JL.layoutOk(dump, profile) => bool. Без порта дамп не verified. */
+const JL={decrypt:null,parseHeader:null,verifyCrcs:null,layoutOk:null};
+/* Контракты, расширенные Дополнением №1:
+   UFW.parse(...) → ещё flashBin (Uint8Array, on-flash, offset = адрес флеша), appBin (plaintext), internalJlCrcOk (bool)
+   QIX.sendWindow(...) → {crcOk:boolean} — ack окна; QIX.apply(ctx) → {wholeFileCrcOk:boolean} — completion 0x20/0x1C
+   QIX.enterService(ctx) — опц.: вход в Update-режим перед HASH_RANGE, если прошивка этого требует */
+
+/* ---- src/ui/i18n.js ---- */
+/* ===== i18n ===== */
+const T={conn:['Подключить','Connect'],disc:['Отключить','Disconnect'],connAll:['Все устройства','All devices'],
+  st_off:['нет связи','offline'],st_connecting:['подключение…','connecting…'],st_on:['на связи','connected'],
+  passport:['Паспорт устройства','Device passport'],image:['Образ и вердикт','Image & verdict'],flash:['Прошивка','Flashing'],settings:['Настройки','Settings'],
+  rescan:['Перечитать','Re-read'],copy:['Копировать','Copy'],gatt:['GATT-карта','GATT map'],
+  drop:['Перетащите .ufw / .bin или нажмите (≤ 16 МБ). Файл не покидает устройство.','Drop .ufw / .bin or click (≤ 16 MB). The file never leaves this device.'],
+  dumpPass:['Паспорт дампа (.json) для restore:','Dump passport (.json) for restore:'],path:['Путь OTA','OTA path'],
+  phrasePh:['Введите ПРОШИТЬ','Type FLASH'],phraseWord:['ПРОШИТЬ','FLASH'],risk:['Я понимаю риск','I understand the risk'],
+  phoneBt:['Bluetooth на телефоне выключен (одно соединение)','Phone Bluetooth is off (single link)'],
+  btnFlash:['Прошить','Flash'],abort:['Прервать','Abort'],probe:['Probe (0 записей)','Probe (0 writes)'],pcycle:['Я сделал(а) power-cycle','I power-cycled'],
+  log:['Журнал','Log'],s_connTo:['Таймаут подключения, мс','Connect timeout, ms'],s_reqTo:['Таймаут запроса, мс','Request timeout, ms'],s_winTo:['Таймаут окна, мс','Window timeout, ms'],
+  s_chunk:['Чанк, байт (≤ 490)','Chunk, bytes (≤ 490)'],s_win:['Окно, кадров','Window, frames'],s_retries:['Повторы','Retries'],s_expert:['Expert: сырые кадры','Expert: raw frames'],
+  s_chime:['Тихий звук успеха','Quiet success chime'],s_theme:['Тема','Theme'],s_lang:['Язык','Language'],dark:['Тёмная','Dark'],light:['Светлая','Light'],
+  allow:['Allowlist SHA-256 (known-good образы и OEM uboot)','SHA-256 allowlist (known-good images, OEM uboot)'],add:['Добавить','Add'],
+  impProf:['Импорт профилей','Import profiles'],expProf:['Экспорт профилей','Export profiles'],reset:['Сброс к умолчаниям','Reset defaults'],tests:['Самотесты','Self-tests'],
+  discT:['Перед началом','Before you start'],accept:['Понимаю','I understand'],
+  discB:['Только своё железо, исследовательское использование. Прошивка может окирпичить бейдж; восстановление — только USB-ISP вне браузера. Файлы не покидают устройство, сетевых запросов нет.','Own hardware only, research use. Flashing can brick the badge; recovery is USB-ISP only, outside the browser. Files stay local, no network requests.'],
+  unsup:['E-BLE-001: нет Web Bluetooth. Нужен Chrome / Edge / Brave / Opera на десктопе или Android, через HTTPS или localhost. Инспекция образов работает и здесь.','E-BLE-001: no Web Bluetooth. Use Chrome / Edge / Brave / Opera on desktop or Android over HTTPS or localhost. Image inspection still works here.'],
+  noDev:['Устройство не подключено','No device connected'],noImg:['Образ не загружен','No image loaded'],
+  verdictNone:['Вердикт — после подключения и загрузки образа','Verdict appears after connecting and loading an image'],
+  heur:['Эвристика: UFW-адаптер не портирован — chipkey / uboot / CRC / геометрия не проверены, поэтому BLOCK.','Heuristic: UFW adapter not ported — chipkey / uboot / CRC / geometry unverified, hence BLOCK.'],
+  pf_batt:['Батарея ≥ 30% или зарядка','Battery ≥ 30% or charging'],pf_gatt:['GATT жив, одно соединение','GATT alive, single link'],pf_verdict:['Вердикт ALLOW или подтверждённый WARN','ALLOW or confirmed WARN'],
+  pf_test:['TEST_MODE / probe не активны','TEST_MODE / probe inactive'],pf_wake:['Screen Wake Lock доступен','Screen Wake Lock available'],pf_phone:['BT телефона выключен','Phone BT off'],pf_tr:['OTA-транспорт портирован (PORT: qix-ble)','OTA transport ported (PORT: qix-ble)'],
+  busy:['Идёт прошивка','Flashing in progress'],oneConn:['Соединение уже есть','Already connected'],
+  pcConfirm:['Подтвердите: бейдж был выключен и включён по питанию. Соединение будет закрыто.','Confirm the badge was power-cycled. The link will be closed.'],
+  probeConfirm:['Probe оставит бейдж в update-mode, затем обязателен power-cycle. Продолжить?','Probe leaves the badge in update mode; a power-cycle is then required. Continue?'],
+  authNP:['auth: адаптер не портирован или тест-вектор не пройден — паспорт без auth','auth: adapter not ported or test vector failed — passport without auth'],
+  e_ota1:['REQ_UPDATE отвергнут — вероятно TEST_MODE. Выключите/включите бейдж и нажмите «Я сделал(а) power-cycle».','REQ_UPDATE rejected — likely TEST_MODE. Power-cycle the badge and press “I power-cycled”.'],
+  e_bond:['Обрыв на первой записи — вероятно устаревшее сопряжение. Удалите бейдж из сопряжённых в ОС и подключитесь заново.','Link dropped on first write — likely a stale bond. Remove the badge from OS pairings and reconnect.'],
+  e_ota4:['Бейдж не вернулся после apply. НЕ прошивайте повторно вслепую. Восстановление — только USB-ISP вне приложения. Прошивка заблокирована до перезагрузки страницы.','Badge did not return after apply. Do NOT retry blindly. Recovery is USB-ISP only. Flashing locked until page reload.'],
+  ok_done:['Прошивка завершена и подтверждена','Flash complete and verified'],meta:['Паспорт собран','Passport captured'],imgOk:['Образ разобран','Image parsed']};
+const t=k=>(T[k]||[k])[S.set.lang==='en'?1:0];
+
+/* ---- src/ui/i18n-int.js ---- */
+/* ===== i18n: Дополнение №1 ===== */
+Object.assign(T,{ok_done:['Прошивка завершена','Flash complete'],integrity:['Целостность','Integrity'],
+  dumpCert:['Сертификат дампа (dump.cert.json) для restore:','Dump certificate (dump.cert.json) for restore:'],certWired:['Сертифицировать загруженный дамп (провод)','Certify loaded dump (wired)'],
+  rbL1:['Verify readback (L1)','Verify readback (L1)'],rhL2:['Re-hash (L2)','Re-hash (L2)'],acceptPartial:['Принять partial','Accept partial'],copyDig:['Копировать digest','Copy digests'],
+  takeDump:['Снять дамп (BLE, TEST_MODE)','Dump flash (BLE, TEST_MODE)'],spot:['Spot-check дампа','Spot-check dump'],certView:['Сертификат дампа','Dump certificate'],
+  s_rbOffer:['Предлагать readback (L1)','Offer readback (L1)'],s_spotN:['Spot-check, блоков по 4 КБ','Spot-check, 4 KB blocks'],s_span:['VERIFY_SPAN (0xA:0xB)','VERIFY_SPAN (0xA:0xB)'],s_hashTo:['Таймаут HASH_RANGE, мс','HASH_RANGE timeout, ms'],
+  rbConfirm:['Readback (L1) переведёт бейдж в TEST_MODE: перед следующей OTA обязателен power-cycle. Выполнить?','Readback (L1) puts the badge into TEST_MODE: power-cycle before the next OTA. Run it?'],
+  dumpConfirm:['Дамп по BLE включает TEST_MODE и занимает минуты. Дамп никогда не прошивается автоматически. Продолжить?','A BLE dump enables TEST_MODE and takes minutes. Dumps are never flashed automatically. Continue?'],
+  wiredConfirm:['Подтвердите: дамп снят проводом (uboot) с ПОДКЛЮЧЁННОГО сейчас юнита. Сертификат привяжет его к паспорту этого устройства.','Confirm: this dump was read over wire (uboot) from the CURRENTLY connected unit. The certificate binds it to this device passport.'],
+  certOk:['Сертификат дампа: verified','Dump certificate: verified'],certBad:['Сертификат дампа НЕ verified — restore запрещён','Dump certificate NOT verified — restore blocked'],
+  certSig:['Подпись сертификата не подтверждена этим браузером — сертифицируйте дамп заново','Certificate signature not verified by this browser — re-certify the dump'],
+  e_int:['Целостность: failed. Повтор вслепую запрещён. Восстановление — USB-ISP или свой verified-дамп через RCSP. Прошивка заблокирована до перезагрузки страницы.','Integrity failed. No blind retry. Recover via USB-ISP or your own verified dump over RCSP. Flashing locked until page reload.'],
+  needPC:['После readback активен TEST_MODE: сделайте power-cycle перед следующей OTA','TEST_MODE after readback: power-cycle before the next OTA'],
+  imgChanged:['Загружен другой образ — сверка невозможна','A different image is loaded — cannot verify'],
+  i_chunk:['CRC16 чанков (аки окон)','Chunk CRC16 (window acks)'],i_whole:['CRC16 файла (completion 0x20/0x1C)','Whole-file CRC16 (completion 0x20/0x1C)'],
+  i_jl:['Внутренние CRC JL-образа','Internal JL image CRCs'],i_boot:['Boot-маркер / имя / версия','Boot marker / name / version'],i_rb:['Readback / HASH_RANGE','Readback / HASH_RANGE']});
+
+/* ---- src/state/store.js ---- */
+/* ===== state ===== */
+const DEF={connectTo:15000,reqTo:3000,winTo:5000,chunk:490,win:8,retries:3,expert:false,chime:false,theme:'dark',lang:'ru',readbackOffer:true,spotN:16,verifySpan:'0x0:0xFC000',hashTo:30000};
+const LS=(k,d)=>{try{return JSON.parse(localStorage.getItem('bg.'+k))??d}catch{return d}};
+const SV=(k,v)=>{try{localStorage.setItem('bg.'+k,JSON.stringify(v))}catch{}};
+const S={set:{...DEF,...LS('set',{})},allow:LS('allow',{uboot:[],image:[]}),flags:LS('flags',{testMode:false,dump:false,probe:false}),profiles:LS('profiles',null)||structuredClone(PROFILES),
+  dev:null,chars:{},gatt:null,gattReady:false,conn:'off',P:null,R:null,buf:null,dumpPass:null,V:null,path:'qix',phase:'idle',log:[],waiters:[],ac:null,wake:null,
+  prog:{done:0,total:0,t0:0,start:0,win:0},abort:false,locked:false,userDisc:false,reconnecting:false,report:null,dumpCert:null,dumpBuf:null,img:null,l0:null,int:null,asyncTests:null,chunkCrc:{ok:0,fail:0}};
+const ACTIVE=['preflight','armed','transferring','paused','resuming','applying','rebooting','verifying-marker','verifying-hash','verifying-readback','dumping'];
+const ABORTABLE=['preflight','armed','transferring','paused','resuming'];
+
+/* ---- src/util/util.js ---- */
+/* ===== utils ===== */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'—').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const short=u=>u.slice(4,8).toLowerCase();
+const ascii=u=>String.fromCharCode(...u).replace(/[^\x20-\x7e]+/g,'\n');
+function withTimeout(p,ms,code='timeout'){let id;return Promise.race([p,new Promise((_,r)=>{id=setTimeout(()=>r(new Error(code)),ms)})]).finally(()=>clearTimeout(id))}
+let qTail=Promise.resolve();
+// Web Bluetooth запрещает параллельные GATT-операции → единая очередь
+const gq=(fn,ms=S.set.reqTo)=>{const p=qTail.then(()=>withTimeout(fn(),ms,'E-GATT timeout'));qTail=p.catch(()=>{});return p};
+function download(name,data){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([typeof data==='string'||data instanceof Uint8Array?data:JSON.stringify(data,null,2)]));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+const copy=s=>(navigator.clipboard?navigator.clipboard.writeText(s):Promise.reject()).then(()=>toast('✓'),()=>toast('clipboard ✕','warn'));
+function toast(msg,kind='info'){const d=document.createElement('div');d.className='toast toast--'+kind;d.textContent=msg;$('#toasts').append(d);setTimeout(()=>d.remove(),kind==='block'?10000:4500)}
+function idbOpen(){return new Promise((res,rej)=>{const o=indexedDB.open('badgeguard',2);
+  o.onupgradeneeded=()=>{for(const[n,opt]of[['passports',{autoIncrement:true}],['sessions',{autoIncrement:true}],['keys',{}]])if(!o.result.objectStoreNames.contains(n))o.result.createObjectStore(n,opt)};
+  o.onsuccess=()=>res(o.result);o.onerror=()=>rej(o.error)})}
+async function idbDo(store,mode,fn){const db=await idbOpen();try{return await new Promise((res,rej)=>{const tx=db.transaction(store,mode),r=fn(tx.objectStore(store));tx.oncomplete=()=>res(r.result);tx.onerror=()=>rej(tx.error)})}finally{db.close()}}
+const idb=(s,v)=>idbDo(s,'readwrite',st=>st.add(JSON.parse(JSON.stringify(v)))).catch(()=>{});
+const idbGet=(s,k)=>idbDo(s,'readonly',st=>st.get(k));
+const idbPut=(s,k,v)=>idbDo(s,'readwrite',st=>st.put(v,k));
+function chime(){if(!S.set.chime)return;try{const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=880;g.gain.value=.04;o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.15);o.onended=()=>a.close()}catch{}}
+
+/* ===== log ===== */
+function log(dir,ch,u8,note=''){const e={ts:new Date().toISOString(),dir,ch,hex:u8?hex(u8):'',note};S.log.push(e);
+  if(S.log.length>50000)S.log.splice(0,10000); // shortcut: кольцевой буфер; полный лог сессии — в IndexedDB по завершении прошивки
+  appendLog(e)}
+function appendLog(e){if(!S.set.expert&&e.dir!=='EV'&&!e.note)return;const li=document.createElement('li');li.className=e.dir.toLowerCase();
+  li.textContent=`${e.ts.slice(11,23)} ${e.dir}${e.ch?' '+e.ch:''} ${S.set.expert?e.hex:''} ${e.note}`.replace(/\s+/g,' ');
+  const L=$('#log');L.append(li);while(L.childElementCount>400)L.firstChild.remove();L.scrollTop=L.scrollHeight}
+const rebuildLog=()=>{$('#log').textContent='';S.log.slice(-1500).forEach(appendLog)};
+const logText=()=>S.log.map(e=>`${e.ts} ${e.dir} ${e.ch} ${e.hex} ${e.note}`).join('\n');
+function decode(k,u){if(u[0]===0xFE&&u[1]===0xDC&&u[2]===0xBA)return`FE flag=${hx(u[3])} cmd=${hx(u[4])} len=${(u[5]<<8)|u[6]}`;
+  if(u[0]===0x9E){const a=ascii(u.slice(4)).trim();return`9E ${hex(u.slice(1,4))}${a.length>2?' "'+a.replace(/\n/g,' ')+'"':''}`}
+  if(k==='ae02'&&u.length<=17)return'auth';return''}
+
+/* ---- src/ble/transport.js ---- */
+/* ===== BLE transport ===== */
+const NAMES=['E87','E92','L8','X9','LED Badge','EC-BADGE'];
+const SVC={ae00:'0000ae00-0000-1000-8000-00805f9b34fb',fd:'c2e6fd00-e966-1000-8000-bef9c223df6a'};
+const OPT=[SVC.ae00,SVC.fd,'battery_service','generic_access'];
+const fe=(flag,cmd,body=[])=>Uint8Array.of(0xFE,0xDC,0xBA,flag,cmd,body.length>>8,body.length&255,...body,0xEF);
+const isFE=(u,cmd)=>u[0]===0xFE&&u[1]===0xDC&&u[2]===0xBA&&u[4]===cmd;
+const setConn=c=>{S.conn=c;render()};
+
+async function w(k,bytes,note=''){const c=S.chars[k];if(!c)throw new Error('E-GATT-001 '+k);const u=bytes instanceof Uint8Array?bytes:Uint8Array.from(bytes);
+  log('TX',k,u,note);return gq(()=>c.properties.writeWithoutResponse?c.writeValueWithoutResponse(u):c.writeValueWithResponse(u))}
+const waitFor=(pred,ms)=>new Promise((res,rej)=>{const wt={pred,res:x=>{clearTimeout(id);res(x)},rej:e=>{clearTimeout(id);rej(e)}};
+  const id=setTimeout(()=>{S.waiters=S.waiters.filter(y=>y!==wt);rej(new Error('timeout'))},ms);S.waiters.push(wt)});
+async function req(k,b,pred,note,ms=S.set.reqTo){const p=waitFor(pred,ms);p.catch(()=>{});await w(k,b,note);return p}
+
+function onRx(e){const v=e.target.value,u=new Uint8Array(v.buffer.slice(v.byteOffset,v.byteOffset+v.byteLength)),k=short(e.target.uuid);
+  log('RX',k,u,decode(k,u));sniff(u);
+  S.waiters=S.waiters.filter(x=>{if(x.pred(k,u)){x.res({k,u});return false}return true})}
+function sniff(u){if(!S.P)return;const s=ascii(u),sdk=s.match(/jl_sdk_ac\w+/),ver=s.match(/\d+\.\d+\.\d+\.\d+\.\d+/);
+  if(sdk)S.P.sdkString=sdk[0];if(ver)S.P.fwVersion=ver[0];if(/BADGE-FWMARK/.test(s))S.P.bootMarker=true}
+
+async function connect(all){
+  if(!navigator.bluetooth)return toast('E-BLE-001','block');
+  if(S.dev&&S.dev.gatt.connected)return toast(t('oneConn'),'warn');
+  let d;try{d=await navigator.bluetooth.requestDevice(all?{acceptAllDevices:true,optionalServices:OPT}:{filters:[...NAMES.map(namePrefix=>({namePrefix})),{services:[SVC.ae00]}],optionalServices:OPT})}
+  catch(e){return toast('E-BLE-002: '+e.message,'warn')}
+  if(S.ac)S.ac.abort();S.ac=new AbortController();S.dev=d;S.userDisc=false;
+  d.addEventListener('gattserverdisconnected',onDisc,{signal:S.ac.signal});
+  try{await gattUp();await collectMeta()}catch(e){log('EV','',null,'E-BLE-003 '+e.message);toast('E-BLE-003: '+e.message,'block');setConn(d.gatt.connected?'on':'off')}}
+
+async function gattUp(){
+  setConn('connecting');
+  const srv=await withTimeout(S.dev.gatt.connect(),S.set.connectTo,'E-BLE-003 connect timeout');
+  const chars={},g={services:[],chars:{}};
+  for(const s of await gq(()=>srv.getPrimaryServices())){g.services.push(s.uuid);
+    const cs=await gq(()=>s.getCharacteristics()).catch(()=>[]);
+    g.chars[s.uuid]=cs.map(c=>`${c.uuid} [${['read','write','writeWithoutResponse','notify','indicate'].filter(p=>c.properties[p]).join(',')}]`);
+    for(const c of cs)chars[short(c.uuid)]??=c}
+  S.chars=chars;S.gatt=g;
+  for(const k of['ae02','fd00','fd01','fd03','fd05']){const c=chars[k];if(!c||!(c.properties.notify||c.properties.indicate))continue;
+    try{await gq(()=>c.startNotifications());c.addEventListener('characteristicvaluechanged',onRx,{signal:S.ac.signal})}catch(e){log('EV',k,null,'notify ✕ '+e.message)}}
+  S.gattReady=true;log('EV','',null,`GATT ↑ ${g.services.length} services`);setConn('on')}
+
+async function onDisc(){S.gattReady=false;S.waiters.forEach(x=>x.rej(new Error('disconnected')));S.waiters=[];
+  log('EV','',null,'disconnected');if(S.phase==='transferring'||S.phase==='resuming')S.phase='paused';setConn('off');
+  if(S.userDisc||S.reconnecting)return;S.reconnecting=true;
+  try{for(let i=0;i<7;i++){await sleep(Math.min(16000,1000*2**i));if(S.userDisc)return;
+    try{await gattUp();return}catch(e){log('EV','',null,`reconnect ${i+1} ✕ ${e.message}`)}}
+    toast('E-OTA-003 / E-BLE-003','block')}finally{S.reconnecting=false}}
+async function waitConn(want,ms){const end=Date.now()+ms;while(Date.now()<end){if(want?S.gattReady&&S.dev.gatt.connected:!S.dev.gatt.connected)return true;await sleep(300)}return false}
+function disconnect(){S.userDisc=true;if(S.dev&&S.dev.gatt.connected)S.dev.gatt.disconnect();S.gattReady=false;setConn('off')}
+async function readBatt(){const c=S.chars['2a19'];if(!c)return null;return(await gq(()=>c.readValue())).getUint8(0)}
+
+/* ---- src/protocol/auth.js ---- */
+/* ===== auth ===== */
+const profKey=id=>({key:fromHex(AUTH.profiles[id].key),magic:fromHex(AUTH.profiles[id].magic)});
+function authSelfTest(){for(const id of['A','B']){const v=AUTH.profiles[id].vector;AUTH.ok[id]=false;
+  if(AUTH.encrypt&&v)try{AUTH.ok[id]=eq(AUTH.encrypt(fromHex(v[0]),profKey(id)),fromHex(v[1]))}catch{}}}
+async function authHandshake(ms){
+  const ids=['A','B'].filter(i=>AUTH.ok[i]);if(!ids.length){log('EV','',null,t('authNP'));return{ok:false,keyProfile:null}}
+  if(!S.chars.ae01||!S.chars.ae02)throw new Error('E-GATT-001 AE01/AE02');
+  const rnd=crypto.getRandomValues(new Uint8Array(16)),on=(k,u,b)=>k==='ae02'&&u[0]===b;
+  const r=await req('ae01',[0,...rnd],(k,u)=>on(k,u,1)&&u.length>=17,'auth 1/6',ms);
+  const id=ids.find(i=>eq(r.u.slice(1,17),AUTH.encrypt(rnd,profKey(i)))); // авто-выбор ключ-профиля по ответу
+  if(!id)throw new Error('E-AUTH-001 key profile mismatch');
+  const ch=await req('ae01',[2,...new TextEncoder().encode('pass')],(k,u)=>on(k,u,0)&&u.length>=17,'auth 3/6',ms);
+  const fin=await req('ae01',[1,...AUTH.encrypt(ch.u.slice(1,17),profKey(id))],(k,u)=>on(k,u,2),'auth 5/6',ms);
+  if(!ascii(fin.u).includes('pass'))throw new Error('E-AUTH-001');
+  return{ok:true,keyProfile:id}}
+
+/* ---- src/protocol/meta.js ---- */
+/* ===== meta ===== */
+function timeFrame(d=new Date()){const y=d.getFullYear();return[0x9E,0x45,0x08,0x02,0x07,0x00,y>>8,y&255,d.getMonth()+1,d.getDate(),0x00,d.getHours(),d.getMinutes()]}
+async function collectMeta(){
+  const t0=Date.now(),left=()=>Math.max(300,Math.min(S.set.reqTo,10000-(Date.now()-t0)));
+  S.P={deviceId:S.dev.id,name:S.dev.name||null,chipFamily:'unknown',sdkString:null,fwVersion:null,productName:null,battery:{level:null,charging:null},gatt:S.gatt,
+    capabilities:{qixFd00:!!S.chars.fd00,rcspOta:!!(S.chars.ae01&&S.chars.ae02),batteryService:!!S.chars['2a19']},auth:{ok:false,keyProfile:null},
+    testModeSuspected:!!S.flags.testMode,profileId:null,capturedAt:null,bootMarker:false};
+  render();
+  const step=async(n,f)=>{if(Date.now()-t0>10000)return log('EV','',null,n+': skipped (10 s budget)');try{await f()}catch(e){log('EV','',null,`${n}: ${e.message}`)}};
+  await step('battery',async()=>{S.P.battery.level=await readBatt()});
+  await step('name',async()=>{if(S.chars['2a00'])S.P.name=new TextDecoder().decode(await gq(()=>S.chars['2a00'].readValue()))||S.P.name});
+  await step('passive FD01',()=>sleep(Math.min(1200,left())));
+  await step('auth',async()=>{S.P.auth=await authHandshake(left())});
+  if(S.P.auth.ok){
+    await step('0x03',()=>req('ae01',fe(0xC0,0x03),(k,u)=>k==='ae02'&&isFE(u,0x03),'target_info',left()));
+    await step('0x07',()=>req('ae01',fe(0xC0,0x07),(k,u)=>k==='ae02'&&isFE(u,0x07),'sys_info',left()))}
+  await step('bootstrap FD02',async()=>{if(!S.chars.fd02)throw new Error('no FD02');
+    await w('fd02',timeFrame(),'time');await w('fd02',[0x9E,0xB5,0x0B,0x29,0x01,0x00,0x80],'heartbeat');
+    const r=await req('fd02',[0x9E,0xD3,0x0B,0xC6,0x01,0x00,0x01],(k,u)=>k==='fd01'&&u[0]===0x9E&&u[3]===0xC7,'C6 info',left());
+    S.P.productName=ascii(r.u.slice(4)).split('\n').find(s=>s.length>=3&&!/jl_sdk|\d+\.\d+\.\d+/.test(s))||null});
+  S.P.chipFamily=familyOf(S.P.sdkString);S.P.profileId=matchProfile(S.P,S.profiles);S.P.capturedAt=new Date().toISOString();
+  log('EV','',null,`passport ${Date.now()-t0} ms, profile=${S.P.profileId}`);idb('passports',S.P);toast(t('meta'),S.P.profileId?'ok':'warn');render()}
+
+/* ---- src/image/image.js ---- */
+/* ===== image ===== */
+function workerMain(){onmessage=async e=>{const buf=e.data,b=new Uint8Array(buf);
+  const sha=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buf)),x=>x.toString(16).padStart(2,'0')).join('');
+  const out=[];let s='';for(let i=0;i<=b.length;i++){const c=b[i];if(c>=32&&c<127)s+=String.fromCharCode(c);else{if(s.length>=5&&out.length<8000)out.push(s);s=''}}
+  const txt=out.join('\n'),m=re=>(txt.match(re)||[null])[0];
+  postMessage({buf,sha,qix:(b[0]===0x62&&b[1]===0x63&&b[2]===0x61&&b[3]===0x66)||(b[0]===0xBC&&b[1]===0xAF),
+    sdk:m(/jl_sdk_ac\w+/),ver:m(/\b\d+\.\d+\.\d+\.\d+\.\d+\b/),keyMac:/key_mac/i.test(txt),crc:crc16(b)},[buf])}}
+function parseInWorker(buf){return new Promise((res,rej)=>{
+  const url=URL.createObjectURL(new Blob([`const crc16=${crc16};(${workerMain})()`],{type:'text/javascript'})),wk=new Worker(url);
+  const end=()=>{wk.terminate();URL.revokeObjectURL(url)};wk.onmessage=e=>{end();res(e.data)};wk.onerror=e=>{end();rej(new Error(e.message))};
+  wk.postMessage(buf,[buf])})} // буфер передаётся в воркер и обратно без копий
+async function loadImage(f){
+  if(!f)return;if(ACTIVE.includes(S.phase))return toast(t('busy'),'warn');
+  if(f.size>16<<20)return toast('E-IMG-001: > 16 MB','block');
+  try{const r=await parseInWorker(await f.arrayBuffer());S.buf=r.buf;const dump=f.size===0x400000||r.keyMac;
+    S.R={fileName:f.name,size:f.size,sha256:r.sha,kind:dump?'full-dump':'unknown',qixWrapped:r.qix,chipkey:null,targetProfileId:profileForSdk(r.sdk,S.profiles),
+      ubootHash:null,appBinSize:null,crc:{hdr:null,list:null,data:null,qix:null},version:r.ver,geometry:null,containsKeyMac:dump,sdkString:r.sdk,fileCrc16:r.crc,internalJlCrcOk:null,slices:{onflash:null,plain:null}};
+    S.img={flashBin:null,appBin:null};
+    if(UFW.parse){const{flashBin=null,appBin=null,...rest}=await UFW.parse(new Uint8Array(S.buf),S.R);Object.assign(S.R,rest);S.img={flashBin,appBin}}
+    await computeSlices();
+    $('#phrase').value='';$('#riskAck').checked=false;toast(t('imgOk'),'ok');log('EV','',null,`image ${f.name} ${f.size} B sha256=${r.sha.slice(0,16)}…`)}
+  catch(e){S.R=null;toast('E-IMG-001: '+e.message,'block')}
+  render()}
+
+/* ---- src/ota/flasher.js ---- */
+/* ===== gate & flasher ===== */
+const ctxNow=()=>({path:S.path,lang:S.set.lang,profiles:S.profiles,ubootAllow:S.allow.uboot,imageAllow:S.allow.image,maxImage:16<<20,qixReady:QIX.ready,rcspReady:RCSP_READY,
+  connected:!!(S.dev&&S.dev.gatt.connected&&S.gattReady),phoneBtOff:$('#phoneBt').checked,flags:S.flags,dumpCert:S.dumpCert});
+const gateOk=()=>!S.locked&&!!S.V&&(S.V.overall==='ALLOW'||S.V.overall==='WARN'&&$('#phrase').value.trim().toUpperCase()===t('phraseWord')&&$('#riskAck').checked);
+const saveFlags=()=>SV('flags',S.flags);
+function setPhase(p){S.phase=p;log('EV','',null,'phase → '+p);render()}
+let rafId=0;const tick=()=>{if(!rafId)rafId=requestAnimationFrame(()=>{rafId=0;ring()})};
+
+async function transfer(ctx){
+  const img=ctx.image,cs=Math.min(490,S.set.chunk),ws=S.set.win,total=img.length;let off=0;
+  outer:while(off<total){
+    if(S.abort)throw new Error('E-ABORT');
+    if(S.phase==='paused'){if(!await waitConn(true,70000))throw new Error('E-OTA-003 link lost');
+      setPhase('resuming');await QIX.resume(ctx,off);setPhase('transferring');S.prog.start=off;S.prog.t0=performance.now()}
+    const chunks=[];for(let o=off;chunks.length<ws&&o<total;o+=cs){const d=img.subarray(o,Math.min(o+cs,total));chunks.push({off:o,data:d,crc:crc16(d)})}
+    let ack;
+    for(let tries=0;;tries++){
+      try{ack=await withTimeout(QIX.sendWindow(ctx,{offset:off,chunks}),S.set.winTo,'E-OTA-002 window timeout');break}
+      catch(e){if(S.phase==='paused')continue outer;if(S.abort)throw new Error('E-ABORT');
+        if(tries>=S.set.retries)throw new Error(e.message.startsWith('E-')?e.message:'E-OTA-002 '+e.message);
+        log('EV','',null,`window @${hx(off)} retry ${tries+1}: ${e.message}`);await sleep(200*2**tries)}}
+    if(!ack||ack.crcOk!==true){S.chunkCrc.fail+=chunks.length;throw new Error('E-OTA-002 chunk CRC @'+hx(off))}S.chunkCrc.ok+=chunks.length;
+    const l=chunks[chunks.length-1];off=l.off+l.data.length;S.prog.done=off;S.prog.win++;tick()}}
+
+async function flash(){
+  if(!gateOk()||ACTIVE.includes(S.phase))return;
+  const before=structuredClone(S.P),vBefore=structuredClone(S.V),t0=Date.now();let err=null;S.abort=false;
+  S.prog={done:0,total:S.buf.byteLength,t0:performance.now(),start:0,win:0};S.chunkCrc={ok:0,fail:0};S.int=null;S.l0=null;
+  const ctx={w,req,waitFor,set:S.set,log,image:new Uint8Array(S.buf),report:S.R,passport:S.P};
+  try{
+    setPhase('preflight');
+    const lvl=await readBatt();if(lvl==null)throw new Error('E-PRE battery read');S.P.battery.level=lvl;render();
+    if(!gateOk())throw new Error('E-PRE verdict');
+    if(!('wakeLock' in navigator))throw new Error('E-PRE Wake Lock unsupported');S.wake=await navigator.wakeLock.request('screen');
+    setPhase('armed');
+    try{await QIX.begin(ctx)}catch(e){S.P.testModeSuspected=true;throw new Error('E-OTA-001 '+e.message)}
+    setPhase('transferring');await transfer(ctx);
+    setPhase('applying');let applied;
+    try{applied=await QIX.apply(ctx);setPhase('rebooting');await waitConn(false,30000);if(!await waitConn(true,70000))throw new Error('no return')}
+    catch(e){throw new Error('E-OTA-004 '+e.message)}
+    setPhase('verifying-marker');await collectMeta();
+    const nameChanged=S.P.name==='EC-BADGE'&&before.name!=='EC-BADGE',verChanged=!!S.P.fwVersion&&S.P.fwVersion!==before.fwVersion;
+    S.l0={imageSha256:S.R.sha256,chunkCrc:{...S.chunkCrc},wholeFileCrc16:{value:S.R.fileCrc16,ok:!!applied&&applied.wholeFileCrcOk===true},ufwCrc:{...S.R.crc},
+      internalJlCrcOk:S.R.internalJlCrcOk,bootMarker:{ok:S.P.profileId===before.profileId&&(nameChanged||verChanged||!!S.P.bootMarker),value:S.P.bootMarker?'BADGE-FWMARK':null},
+      nameChanged,versionBefore:before.fwVersion,versionAfter:S.P.fwVersion};
+    const rep=await runVerify('auto');
+    if(rep.verdict==='failed')throw new Error((S.l0.bootMarker.ok?'E-INT-006 ':'E-OTA-005 ')+rep.errors.join(', '));
+    setPhase('done');toast(`${t('ok_done')}: ${rep.level} ${rep.verdict}`,rep.verdict==='verified'?'ok':'warn');chime()}
+  catch(e){err=e.message;S.phase='error';onFlashErr(e)}
+  finally{if(S.wake)S.wake.release().catch(()=>{});S.wake=null;
+    S.report={image:{name:S.R.fileName,sha256:S.R.sha256,size:S.R.size},path:S.path,passportBefore:before,passportAfter:S.P,verdict:vBefore,
+      startedAt:new Date(t0).toISOString(),durationMs:Date.now()-t0,bytesSent:S.prog.done,result:err?'error':'done',error:err,integrity:S.int};
+    idb('sessions',{report:S.report,log:S.log});render()}}
+function onFlashErr(e){const m=e.message;log('EV','',null,'ERROR '+m);
+  if(m.startsWith('E-OTA-001'))toast(t('e_ota1'),'block');
+  else if(m.startsWith('E-OTA-004')){S.locked=true;toast(t('e_ota4'),'block')}
+  else if(m.startsWith('E-OTA-003')&&S.prog.done===0)toast(t('e_bond'),'block');
+  else if(m.startsWith('E-INT')||m.startsWith('E-OTA-005')){S.locked=true;toast(t('e_int'),'block')}
+  else toast(m,'block')}
+async function probe(){
+  if(!QIX.ready||!S.P||!S.P.profileId||ACTIVE.includes(S.phase)||!confirm(t('probeConfirm')))return;
+  S.flags.probe=true;saveFlags();
+  try{await QIX.probe({w,req,waitFor,set:S.set,log,image:new Uint8Array(S.buf||new ArrayBuffer(0)),report:S.R,passport:S.P});log('EV','',null,'probe ok, power-cycle required')}
+  catch(e){log('EV','',null,'probe: '+e.message);toast('probe: '+e.message,'warn')}render()}
+function powerCycled(){if(ACTIVE.includes(S.phase)||!confirm(t('pcConfirm')))return;
+  S.flags={testMode:false,dump:false,probe:false};saveFlags();if(S.P)S.P.testModeSuspected=false;disconnect();render()}
+
+/* ---- src/integrity/session.js ---- */
+/* ===== integrity/session: post-flash верификация, readback, дампы, сертификаты, UI ===== */
+const rctx=()=>({w,req,waitFor,set:S.set,log,passport:S.P});
+const spanNow=()=>parseSpan(S.set.verifySpan)||[0,0xFC000];
+async function computeSlices(){if(!S.R)return;const sp=spanNow(),{flashBin,appBin}=S.img||{};S.R.verifySpan=sp.map(hx).join(':');
+  S.R.slices={onflash:flashBin?await sha256hex(spanSlice(flashBin,sp)):null,plain:appBin?await sha256hex(spanSlice(appBin,[0,sp[1]-sp[0]])):null}}
+async function withWake(fn){let wl=null;try{if('wakeLock' in navigator)wl=await navigator.wakeLock.request('screen')}catch{}S.wake=wl;
+  try{return await fn()}finally{if(wl)wl.release().catch(()=>{});S.wake=null}}
+
+async function runVerify(mode){ // 'auto' | 'L1' | 'L2'
+  const prof=S.profiles[S.P&&S.P.profileId];if(!prof)throw new Error('E-OTA-005 profile lost');
+  const io={req},span=spanNow();
+  const rep=await verifyFlash({l0:S.l0,span,cands:S.R.slices,form:prof.expectedForm||null,
+    caps:mode==='L1'?async()=>0:()=>readCaps(io,S.set.reqTo),
+    hash:async(a,l)=>{setPhase('verifying-hash');if(QIX.enterService)await QIX.enterService(rctx());return hashRange(io,a,l,prof.flash.size,S.set.hashTo)},
+    readback:mode==='L2'||!READBACK.ready?null:async(a,l)=>{
+      if(mode==='auto'&&!S.set.readbackOffer||!confirm(t('rbConfirm')))throw new Error('readback declined');
+      setPhase('verifying-readback');S.flags.testMode=true;saveFlags(); // readback = TEST_MODE → R-TEST до power-cycle
+      S.prog={done:0,total:l,t0:performance.now(),start:0,win:0};
+      const rb=await READBACK.dumpRange(rctx(),a,l,d=>{S.prog.done=d;tick()});toast(t('needPC'),'warn');return rb},
+    sha:sha256hex,onCalibrate:f=>{prof.expectedForm=f;SV('profiles',S.profiles);log('EV','',null,'form calibrated → '+f)}});
+  S.int={...rep,acceptedPartial:false};log('EV','',null,`integrity ${rep.level} ${rep.verdict} ${rep.errors.join(', ')}`);
+  idb('sessions',{integrity:S.int});render();return S.int}
+async function reverify(mode){
+  if(!S.l0||!S.R||S.conn!=='on'||ACTIVE.includes(S.phase)||!S.P||!S.P.profileId)return;
+  if(S.l0.imageSha256!==S.R.sha256)return toast(t('imgChanged'),'warn');
+  await withWake(async()=>{try{const r=await runVerify(mode);if(r.verdict==='failed'){S.locked=true;toast(t('e_int'),'block')}setPhase(r.verdict==='failed'?'error':'done')}
+    catch(e){setPhase('error');toast(e.message,'block')}})}
+
+/* --- сертификаты: HMAC-SHA256, неэкспортируемый ключ этого браузера в IndexedDB --- */
+const canon=c=>{const{sig,sigOk,...r}=c;return new TextEncoder().encode(JSON.stringify(r))};
+const stripCert=({sigOk,...c})=>c;
+async function certKey(){let k=await idbGet('keys','cert').catch(()=>null);
+  if(!k){k=await crypto.subtle.generateKey({name:'HMAC',hash:'SHA-256'},false,['sign','verify']);await idbPut('keys','cert',k).catch(()=>{})}return k}
+async function signCert(c){c.sig=hex(new Uint8Array(await crypto.subtle.sign('HMAC',await certKey(),canon(c))),'').toLowerCase();return c}
+async function verifyCert(c){try{return!!c.sig&&await crypto.subtle.verify('HMAC',await certKey(),fromHex(c.sig),canon(c))}catch{return false}}
+async function certify(buf,passport,prof,method){
+  const c=await validateDump(buf,passport,prof,method,{...JL,reRead:method==='ble-testmode'&&READBACK.ready?(a,l)=>READBACK.dumpRange(rctx(),a,l):null,spotN:S.set.spotN,sha:sha256hex});
+  await signCert(c);S.dumpCert={...c,sigOk:true};
+  log('EV','',null,`certificate ${method} verified=${c.verified} ${c.errors.join(', ')}`);toast(t(c.verified?'certOk':'certBad'),c.verified?'ok':'block');render();return c}
+async function takeDump(){
+  if(!READBACK.ready||S.conn!=='on'||!S.P||!S.P.profileId||ACTIVE.includes(S.phase)||!confirm(t('dumpConfirm')))return;
+  const prof=S.profiles[S.P.profileId],passport=structuredClone(S.P);S.flags.dump=S.flags.testMode=true;saveFlags();
+  await withWake(async()=>{try{setPhase('dumping');S.prog={done:0,total:prof.flash.size,t0:performance.now(),start:0,win:0};
+      S.dumpBuf=await READBACK.dumpRange(rctx(),0,prof.flash.size,d=>{S.prog.done=d;tick()});
+      const c=await certify(S.dumpBuf,passport,prof,'ble-testmode');download('dump.bin',S.dumpBuf);download('dump.cert.json',c);setPhase('done')}
+    catch(e){setPhase('error');toast('dump: '+e.message,'block')}})}
+async function spotCheck(){
+  if(!S.dumpBuf||!S.dumpCert||!READBACK.ready||S.conn!=='on'||ACTIVE.includes(S.phase))return;
+  S.flags.testMode=true;saveFlags();
+  await withWake(async()=>{try{setPhase('dumping');const c=await certify(S.dumpBuf,S.dumpCert.passport,S.profiles[S.P.profileId],'ble-testmode');download('dump.cert.json',c);setPhase('done')}
+    catch(e){setPhase('error');toast('spot-check: '+e.message,'block')}})}
+async function certifyWired(){
+  if(!S.R||S.R.kind!=='full-dump'||!S.P||!S.P.profileId||ACTIVE.includes(S.phase)||!confirm(t('wiredConfirm')))return;
+  try{download('dump.cert.json',await certify(new Uint8Array(S.buf),S.P,S.profiles[S.P.profileId],'wired-uboot'))}catch(e){toast('cert: '+e.message,'block')}}
+
+function renderInt(){
+  const r=S.int,c=S.dumpCert,on=S.conn==='on',act=ACTIVE.includes(S.phase),ready=on&&!act&&S.P&&S.P.profileId;
+  const sv=x=>x===true?'pass':x===false?'block':'warn';
+  const row=(id,sev,msg,ev)=>`<li class="rule rule--${sev}"><span class="rule__i" aria-label="${sev}">${{pass:'✓',warn:'⚠',block:'✕'}[sev]}</span><span class="rule__id">${esc(id)}</span><span>${esc(msg)}</span><span class="rule__ev">${esc(ev)}</span></li>`;
+  $('#intBadge').className='lvl'+(r?' lvl--'+r.verdict:'');$('#intBadge').textContent=r?`${r.level} ${r.verdict}${r.acceptedPartial?' ✓':''}`:'—';
+  $('#intChecks').innerHTML=r?[
+    row('chunk CRC',sv(r.chunkCrc.fail===0&&r.chunkCrc.ok>0),t('i_chunk'),`ok=${r.chunkCrc.ok} fail=${r.chunkCrc.fail}`),
+    row('file CRC16',sv(r.wholeFileCrc16.ok),t('i_whole'),hx(r.wholeFileCrc16.value)),
+    row('UFW CRC',sv(['hdr','list','data'].every(k=>r.ufwCrc[k]===true)),'hdr / list / data / qix',JSON.stringify(r.ufwCrc)),
+    row('JL CRC',sv(r.internalJlCrcOk),t('i_jl'),String(r.internalJlCrcOk)),
+    row('boot',sv(r.bootMarker.ok),t('i_boot'),`${r.bootMarker.value||'—'} name=${r.nameChanged} ${r.versionBefore||'—'} → ${r.versionAfter||'—'}`),
+    row('R-READBACK',r.verdict==='verified'?'pass':r.verdict==='partial'?'warn':'block',t('i_rb'),`${r.readback.method} ${r.readback.formUsed||''} ${r.errors.join(', ')}`)].join(''):'';
+  kv('#intDig',r&&{image:r.imageSha256,expected:r.readback.expected||r.codeSliceSha256,device:r.readback.digest},'—');
+  $('#certPre').textContent=c?JSON.stringify({...stripCert(c),sigOk:c.sigOk,passport:c.passport&&{deviceId:c.passport.deviceId,name:c.passport.name,fwVersion:c.passport.fwVersion}},null,2):'—';
+  $('#btnRb').disabled=!(ready&&S.l0&&S.R&&READBACK.ready);$('#btnRh').disabled=!(ready&&S.l0&&S.R);
+  $('#btnAccept').hidden=!(r&&r.verdict==='partial'&&!r.acceptedPartial);$('#btnCopyDig').disabled=!r;
+  $('#btnDump').disabled=!(ready&&READBACK.ready);$('#btnSpot').disabled=!(ready&&READBACK.ready&&S.dumpBuf);
+  $('#btnCertWired').disabled=!(S.R&&S.R.kind==='full-dump'&&S.P&&S.P.profileId&&!act);
+  $('#btnExpCert').disabled=!c;$('#btnExpInt').disabled=!r}
+
+/* ---- src/ui/render.js ---- */
+/* ===== render ===== */
+function kv(sel,o,empty){$(sel).innerHTML=o?Object.entries(o).map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join(''):`<dd class="kv__empty">${esc(empty)}</dd>`}
+function ring(){const p=S.prog,f=p.total?p.done/p.total:0,el=(performance.now()-p.t0)/1000,sp=el>0?(p.done-p.start)/1024/el:0;
+  $('#ringArc').style.strokeDashoffset=String(1024.2*(1-f));$('#ringPct').textContent=Math.floor(f*100)+'%';$('#ringPhase').textContent=S.phase;
+  $('#ring').setAttribute('aria-valuenow',Math.floor(f*100));$('#ring').classList.toggle('ring--live',S.phase==='transferring');
+  $('#ringSub').textContent=p.total?`${sp.toFixed(2)} KB/s  ETA ${sp>0?Math.ceil((p.total-p.done)/1024/sp)+' s':'—'}\nwin ${p.win}  chunk ${Math.ceil(p.done/S.set.chunk)}/${Math.ceil(p.total/S.set.chunk)}`:''}
+function render(){
+  const on=S.conn==='on',P=S.P,R=S.R,act=ACTIVE.includes(S.phase);
+  $('#connDot').className='dot dot--'+S.conn;$('#connTxt').textContent=t('st_'+S.conn);
+  $('#hdrName').textContent=(P&&P.name)||(S.dev&&S.dev.name)||'—';$('#hdrBatt').textContent=P&&P.battery.level!=null?`🔋${P.battery.level}%`:'';
+  $('#btnConn').textContent=on?t('disc'):t('conn');$('#btnConnAll').hidden=on;
+  kv('#passKv',P&&{name:P.name,deviceId:P.deviceId,chipFamily:P.chipFamily,sdkString:P.sdkString,fwVersion:P.fwVersion,productName:P.productName,
+    battery:`${P.battery.level??'—'}% charging=${P.battery.charging}`,auth:P.auth.ok?'ok, profile '+P.auth.keyProfile:'—',profileId:P.profileId||'— (OTA BLOCK)',
+    capabilities:Object.entries(P.capabilities).filter(x=>x[1]).map(x=>x[0]).join(', ')||'—',testModeSuspected:P.testModeSuspected,capturedAt:P.capturedAt},t('noDev'));
+  $('#gattPre').textContent=S.gatt?Object.entries(S.gatt.chars).map(([s,c])=>s+'\n  '+c.join('\n  ')).join('\n'):'—';
+  kv('#imgKv',R&&{fileName:R.fileName,size:`${R.size} B`,sha256:R.sha256,kind:R.kind,qixWrapped:R.qixWrapped,chipkey:hx(R.chipkey),ubootHash:R.ubootHash,appBinSize:hx(R.appBinSize),
+    crc:JSON.stringify(R.crc),internalJlCrcOk:R.internalJlCrcOk,fileCrc16:hx(R.fileCrc16),'slice on-flash':R.slices.onflash,'slice plaintext':R.slices.plain,version:R.version,sdkString:R.sdkString,targetProfileId:R.targetProfileId,
+    geometry:R.geometry&&`${hx(R.geometry.flashSize)} [${R.geometry.codeSpan.map(hx)}] slot ${hx(R.geometry.appSlot)}`,containsKeyMac:R.containsKeyMac},t('noImg'));
+  $('#heur').hidden=!(R&&!UFW.parse);
+  S.V=P&&R?evaluate(P,R,ctxNow()):null;const V=S.V;
+  $('#verdict').className='verdict'+(V?' verdict--'+V.overall:'');$('#verdict').innerHTML=V?`${V.overall}<small>${V.rules.filter(r=>r.severity!=='pass').map(r=>r.id).join(' ')||'✓'}</small>`:`<small>${esc(t('verdictNone'))}</small>`;
+  $('#rules').innerHTML=V?V.rules.map(r=>`<li class="rule rule--${r.severity}"><span class="rule__i" aria-label="${r.severity}">${{pass:'✓',warn:'⚠',block:'✕'}[r.severity]}</span><span class="rule__id">${r.id}</span><span>${esc(r.message)}</span><span class="rule__ev">${esc(r.evidence)}</span></li>`).join(''):'';
+  $('#warnBox').hidden=!(V&&V.overall==='WARN');
+  const ck=[['pf_batt',P&&P.battery.level!=null&&(P.battery.level>=30||P.battery.charging)],['pf_gatt',on&&S.gattReady],['pf_verdict',gateOk()],
+    ['pf_test',!S.flags.testMode&&!S.flags.probe&&!(P&&P.testModeSuspected)],['pf_wake','wakeLock' in navigator],['pf_phone',$('#phoneBt').checked],['pf_tr',QIX.ready]];
+  $('#checks').innerHTML=ck.map(([k,v])=>`<li class="${v?'ok':'no'}" data-i="${v?'✓':'✕'}">${esc(t(k))}</li>`).join('');
+  $('#btnFlash').disabled=!gateOk()||act;$('#btnAbort').disabled=!ABORTABLE.includes(S.phase);
+  $('#btnProbe').disabled=!QIX.ready||!on||!(P&&P.profileId)||act;$('#btnPC').disabled=act;$('#btnReport').disabled=!S.report;
+  $('#btnRescan').disabled=!on||act;$('#btnConn').disabled=act||!navigator.bluetooth;
+  ring();renderInt()}
+function renderAllow(){$('#alList').innerHTML=['image','uboot'].flatMap(k=>S.allow[k].map(h=>`<li><button class="btn btn--s" data-rm="${k}:${h}" aria-label="remove">✕</button>${k} ${h}</li>`)).join('')}
+function applyI18n(){document.documentElement.lang=S.set.lang;document.documentElement.dataset.theme=S.set.theme;
+  document.querySelectorAll('[data-i18n]').forEach(e=>e.textContent=t(e.dataset.i18n));document.querySelectorAll('[data-i18n-ph]').forEach(e=>e.placeholder=t(e.dataset.i18nPh));
+  $('#btnLang').textContent=S.set.lang==='en'?'RU':'EN';
+  authSelfTest();const tests=[...selfTest(),...(S.asyncTests||[]),...['A','B'].map(i=>({n:`auth ${i}: ${AUTH.encrypt?(AUTH.profiles[i].vector?'test vector':'no vector'):'PORT: jl-auth'}`,ok:AUTH.ok[i]}))];
+  $('#tests').innerHTML=tests.map(x=>`<li class="${x.ok?'ok':'no'}">${x.ok?'✓':'✕'} ${esc(x.n)}</li>`).join('');render()}
+function setSetting(k,v){S.set[k]=v;SV('set',S.set);document.querySelectorAll(`[data-set="${k}"]`).forEach(el=>el.type==='checkbox'?el.checked=v:el.value=v);applyI18n();if(k==='expert')rebuildLog();if(k==='verifySpan')computeSlices().then(render)}
+
+/* ---- src/main.js ---- */
+/* ===== init ===== */
+function init(){
+  document.querySelectorAll('[data-set]').forEach(el=>{const k=el.dataset.set;el.type==='checkbox'?el.checked=S.set[k]:el.value=S.set[k];
+    el.addEventListener('change',()=>{let v=el.type==='checkbox'?el.checked:el.value;
+      if(el.type==='number'){v=Math.round(Math.min(+el.max,Math.max(+el.min,+v||DEF[k])));el.value=v}
+      if(k==='verifySpan'){const sp=parseSpan(v);if(!sp||sp[1]>0x17E000){el.value=S.set[k];return toast('VERIFY_SPAN: 0xA:0xB ⊆ CODE [0x0, 0x17E000)','warn')}}
+      setSetting(k,v)})});
+  $('#btnConn').onclick=()=>S.conn==='on'?disconnect():connect(false);$('#btnConnAll').onclick=()=>connect(true);
+  $('#btnTheme').onclick=()=>setSetting('theme',S.set.theme==='dark'?'light':'dark');$('#btnLang').onclick=()=>setSetting('lang',S.set.lang==='en'?'ru':'en');
+  $('#btnRescan').onclick=()=>collectMeta();$('#btnExpPass').onclick=()=>S.P&&download('passport.json',S.P);$('#btnCopyPass').onclick=()=>S.P&&copy(JSON.stringify(S.P,null,2));
+  const drop=$('#drop');$('#fileImg').onchange=e=>{loadImage(e.target.files[0]);e.target.value=''};
+  drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#fileImg').click()}};
+  drop.ondragover=e=>{e.preventDefault();drop.classList.add('drop--over')};drop.ondragleave=()=>drop.classList.remove('drop--over');
+  drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drop--over');loadImage(e.dataTransfer.files[0])};
+  document.querySelectorAll('[name=path]').forEach(r=>r.onchange=()=>{S.path=r.value;render()});
+  $('#fileCert').onchange=async e=>{try{const o=JSON.parse(await e.target.files[0].text());if(!o.dumpSha256||!o.passport)throw new Error('format');
+    S.dumpCert={...o,sigOk:await verifyCert(o)};if(!S.dumpCert.sigOk)toast(t('certSig'),'warn')}catch(x){S.dumpCert=null;toast('cert: '+x.message,'warn')}e.target.value='';render()};
+  ['#phrase','#riskAck','#phoneBt'].forEach(s=>$(s).addEventListener('input',render));
+  $('#btnFlash').onclick=flash;$('#btnAbort').onclick=()=>{if(ABORTABLE.includes(S.phase)){S.abort=true;if(QIX.abort)Promise.resolve().then(()=>QIX.abort({w,log})).catch(()=>{});log('EV','',null,'abort requested')}};
+  $('#btnProbe').onclick=probe;$('#btnPC').onclick=powerCycled;$('#btnReport').onclick=()=>download('flash-report.json',S.report);
+  $('#btnCopyLog').onclick=()=>copy(logText());$('#btnDlLog').onclick=()=>download('session.log',logText());
+  $('#alAdd').onclick=()=>{const h=$('#alHash').value.trim().toLowerCase(),k=$('#alType').value;if(!/^[0-9a-f]{64}$/.test(h))return toast('SHA-256: 64 hex','warn');
+    if(!S.allow[k].includes(h))S.allow[k].push(h);SV('allow',S.allow);$('#alHash').value='';renderAllow();render()};
+  $('#alList').onclick=e=>{const d=e.target.dataset.rm;if(!d)return;const[k,h]=d.split(':');S.allow[k]=S.allow[k].filter(x=>x!==h);SV('allow',S.allow);renderAllow();render()};
+  $('#fileProf').onchange=async e=>{try{const o=JSON.parse(await e.target.files[0].text());
+      for(const p of Object.values(o))if(!p.match||!p.family||!Array.isArray(p.match.gattServices))throw new Error('bad profile');
+      for(const p of Object.values(o)){if(p.ubootSha256Allowlist)p.ubootSha256Allowlist=p.ubootSha256Allowlist.map(h=>h.toLowerCase());(p.knownGoodImages||[]).forEach(x=>x.sha256=x.sha256.toLowerCase())}
+      S.profiles=o;SV('profiles',o);toast('profiles ✓','ok')}catch(x){toast('profiles: '+x.message,'block')}e.target.value='';render()};
+  $('#btnExpProf').onclick=()=>download('profiles.json',S.profiles);
+  $('#btnReset').onclick=()=>{S.profiles=structuredClone(PROFILES);SV('profiles',null);Object.entries(DEF).forEach(([k,v])=>setSetting(k,v))};
+  $('#btnRb').onclick=()=>reverify('L1');$('#btnRh').onclick=()=>reverify('L2');
+  $('#btnAccept').onclick=()=>{if(S.int&&S.int.verdict==='partial'){S.int.acceptedPartial=true;idb('sessions',{integrity:S.int});render()}};
+  $('#btnDump').onclick=takeDump;$('#btnSpot').onclick=spotCheck;$('#btnCertWired').onclick=certifyWired;
+  $('#btnExpCert').onclick=()=>S.dumpCert&&download('dump.cert.json',stripCert(S.dumpCert));$('#btnExpInt').onclick=()=>S.int&&download('integrity-report.json',S.int);
+  $('#btnCopyDig').onclick=()=>S.int&&copy(JSON.stringify({image:S.int.imageSha256,codeSlice:S.int.codeSliceSha256,readback:S.int.readback},null,2));
+  addEventListener('beforeunload',e=>{if(ACTIVE.includes(S.phase)){e.preventDefault();e.returnValue=''}});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.wake&&S.wake.released&&ACTIVE.includes(S.phase))navigator.wakeLock.request('screen').then(x=>S.wake=x,()=>{})});
+  if(!navigator.bluetooth){$('#unsup').hidden=false;$('#btnConn').disabled=$('#btnConnAll').disabled=true}
+  applyI18n();renderAllow();asyncSelfTest().then(r=>{S.asyncTests=r;applyI18n()},e=>toast('self-test: '+e.message,'block'));
+  if(!LS('disc',0)){$('#disc').showModal();$('#btnDisc').onclick=()=>{SV('disc',1);$('#disc').close()}}
+  log('EV','',null,`BadgeGuard ready. auth=${AUTH.ok.A||AUTH.ok.B} ufw=${!!UFW.parse} qix=${QIX.ready} readback=${READBACK.ready} jl=${!!JL.decrypt}`)}
+if('serviceWorker' in navigator&&document.querySelector('link[rel=manifest]'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+init();
+</script>
+</body>
+</html>
