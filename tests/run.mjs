@@ -1,9 +1,30 @@
 // Unit + mock tests: core rules, protocol guards, CRC/SHA vectors, hash mock, and dump validation.
 import{readFileSync}from'node:fs';import vm from'node:vm';import{webcrypto}from'node:crypto';
 globalThis.crypto??=webcrypto;
-vm.runInThisContext(['protocol/jl-auth.js','core/registry.js','core/opmap.js','core/core.js','core/bitfields.js','protocol/rcsp.js','protocol/content.js','protocol/probe.js','protocol/filebrowse.js','protocol/ota.js','protocol/hash.js','integrity/core.js']
+vm.runInThisContext(['protocol/jl-auth.js','core/registry.js','core/opmap.js','core/core.js','core/bitfields.js','protocol/rcsp.js','protocol/content.js','protocol/probe.js','protocol/filebrowse.js','protocol/ota.js','protocol/ota-api.js','protocol/hash.js','integrity/core.js']
   .map(f=>readFileSync(new URL('../src/'+f,import.meta.url),'utf8')).join('\n'),{filename:'core-bundle.js'});
 const res=[...vm.runInThisContext('selfTest()'),...await vm.runInThisContext('asyncSelfTest()')];
+res.push(...vm.runInThisContext(`(()=>{
+  const check=(n,fn)=>{try{fn();return{n,ok:true}}catch(e){return{n,ok:false,error:e.message}}};
+  return[
+    check('OTA API permits one fixed ZRun request without authKey fields',()=>{
+      const body=buildOtaApiRequest('zrun-www-prod','E87_EN','11.1.0.2');
+      if(body.endpointId!=='zrun-www-prod'||body.model!=='E87_EN'||body.version!=='11.1.0.2'||Object.hasOwn(body,'authKey'))throw Error('unexpected request fields')
+      let blocked=false;try{buildOtaApiRequest('zrun-www-prod','Abcd1234Efgh5678','11.1.0.2')}catch{blocked=true}
+      if(!blocked)throw Error('authKey-like model accepted')
+    }),
+    check('OTA API disables JieLi endpoints without a request contract',()=>{
+      let blocked=false;try{buildOtaApiRequest('jieli-api-ota','E87_EN','11.1.0.2')}catch{blocked=true}
+      if(!blocked)throw Error('unverified endpoint accepted')
+    }),
+    check('OTA helper URL requires HTTPS except loopback',()=>{
+      if(normalizeOtaHelperUrl('http://127.0.0.1:8765/ota-helper.php').remote)throw Error('loopback not recognized');
+      if(!normalizeOtaHelperUrl('https://helper.example/ota-helper.php').remote)throw Error('remote helper not recognized');
+      let blocked=false;try{normalizeOtaHelperUrl('http://helper.example/ota-helper.php')}catch{blocked=true}
+      if(!blocked)throw Error('remote HTTP helper accepted')
+    })
+  ];
+})()`));
 res.push(...vm.runInThisContext(`(()=>{
   const check=(n,fn)=>{try{fn();return{n,ok:true}}catch(e){return{n,ok:false,error:e.message}}};
   const reject=(transport,frame)=>{let denied=false;try{validateReadOnlyProbe(transport,frame)}catch{denied=true}if(!denied)throw Error('unsafe frame accepted')};

@@ -119,6 +119,89 @@
       <label class="lab__file"><span data-i18n="contentImage"></span><input id="contentImage" type="file" accept="image/*"></label>
       <button id="btnSendImage" class="btn" data-i18n="sendImage"></button>
     </div>
+    <details class="fold ota-api">
+      <summary data-i18n="otaApiTitle"></summary>
+      <p class="note" data-i18n="otaApiNote"></p>
+      <div class="lab__row">
+        <label><span data-i18n="otaApiEndpoint"></span>
+          <select id="otaApiEndpoint">
+            <optgroup label="ZRun / Zijun">
+              <option value="zrun-www-prod">www.zgntec.com · prod/upgrade (documented)</option>
+              <option value="zrun-www-dev">www.zgntec.com · dev/upgrade (documented)</option>
+              <option value="zrun-www-test">www.zgntec.com · test/upgrade (candidate)</option>
+              <option value="zrun-www-gray">www.zgntec.com · gray/upgrade (candidate)</option>
+              <option value="zrun-www-v2">www.zgntec.com · v2/upgrade (candidate)</option>
+              <option value="zrun-www-prod-upgrade-v2">www.zgntec.com · prod/upgrade/v2 (candidate)</option>
+              <option value="zrun-www-prod-firmware">www.zgntec.com · prod/firmware (candidate)</option>
+              <option value="zrun-www-prod-ota">www.zgntec.com · prod/ota (candidate)</option>
+              <option value="zrun-www-prod-version">www.zgntec.com · prod/version (candidate)</option>
+              <option value="zrun-www-prod-check">www.zgntec.com · prod/check (candidate)</option>
+              <option value="zrun-www-ota-upgrade">www.zgntec.com · hy-cloud/ota/upgrade (candidate)</option>
+              <option value="zrun-www-device-upgrade">www.zgntec.com · hy-cloud/device/upgrade (candidate)</option>
+              <option value="zrun-www-cloud-root">www.zgntec.com · hy-cloud/ (candidate)</option>
+              <option value="zrun-www-root">www.zgntec.com · / (candidate)</option>
+              <option value="zrun-bare-prod">zgntec.com · prod/upgrade (candidate)</option>
+              <option value="zrun-bare-dev">zgntec.com · dev/upgrade (candidate)</option>
+              <option value="zrun-bare-test">zgntec.com · test/upgrade (candidate)</option>
+              <option value="zrun-bare-gray">zgntec.com · gray/upgrade (candidate)</option>
+              <option value="zrun-bare-v2">zgntec.com · v2/upgrade (candidate)</option>
+              <option value="zrun-bare-prod-upgrade-v2">zgntec.com · prod/upgrade/v2 (candidate)</option>
+              <option value="zrun-bare-prod-firmware">zgntec.com · prod/firmware (candidate)</option>
+              <option value="zrun-bare-prod-ota">zgntec.com · prod/ota (candidate)</option>
+              <option value="zrun-bare-prod-version">zgntec.com · prod/version (candidate)</option>
+              <option value="zrun-bare-prod-check">zgntec.com · prod/check (candidate)</option>
+              <option value="zrun-bare-ota-upgrade">zgntec.com · hy-cloud/ota/upgrade (candidate)</option>
+              <option value="zrun-bare-device-upgrade">zgntec.com · hy-cloud/device/upgrade (candidate)</option>
+              <option value="zrun-bare-cloud-root">zgntec.com · hy-cloud/ (candidate)</option>
+              <option value="zrun-bare-root">zgntec.com · / (candidate)</option>
+            </optgroup>
+            <optgroup label="JieLi — contract unknown; requests disabled">
+              <option value="jieli-pkgman" disabled>pkgman.jieliapp.com/</option>
+              <option value="jieli-cam" disabled>cam.jieliapp.com/</option>
+              <option value="jieli-api-ota" disabled>api.jieliapp.com/ota/upgrade</option>
+              <option value="jieli-api-firmware" disabled>api.jieliapp.com/app/firmware</option>
+              <option value="jieli-open-file" disabled>open.jieliapp.com/ota/file</option>
+              <option value="jieli-ota-upgrade" disabled>ota.jieliapp.com/upgrade</option>
+              <option value="jieli-www-ota" disabled>www.zh-jieli.com/api/ota/upgrade</option>
+              <option value="jieli-www-firmware" disabled>www.zh-jieli.com/openapi/firmware</option>
+              <option value="jieli-docs" disabled>doc.zh-jieli.com/</option>
+              <option value="jieli-gitlab" disabled>gitlab.zh-jieli.com/</option>
+              <option value="jieli-test-docs" disabled>test03.jieliapp.com/</option>
+              <option value="jieli-root" disabled>jieliapp.com/</option>
+            </optgroup>
+            <optgroup label="Репозитории / магазины — не API">
+              <option value="source-jieli-ota-apk" disabled>Android-JL_OTA · APK</option>
+              <option value="source-jieli-bluetooth-apk" disabled>Android-JL_Bluetooth · APK</option>
+              <option value="source-electroniccats-fw" disabled>ElectronicCats · AC707 firmware</option>
+              <option value="source-ebadge-cli" disabled>ebadge-python-cli</option>
+              <option value="source-qq-store" disabled>JieLi OTA · 应用宝</option>
+              <option value="source-app-store" disabled>JieLi OTA · App Store</option>
+              <option value="source-play-store" disabled>ZRun · Google Play</option>
+            </optgroup>
+          </select>
+          <output id="otaApiEndpointUrl" class="ota-api__target mono"></output>
+        </label>
+        <label><span data-i18n="otaApiModel"></span><input id="otaApiModel" list="otaApiModels" maxlength="80" value="E87_EN"></label>
+        <datalist id="otaApiModels">
+          <option value="E87_EN"></option><option value="E87"></option><option value="11.1.0.2"></option>
+          <option value="jl_sdk_ac697_publish"></option><option value="139"></option><option value="0x8B"></option>
+          <option value="2"></option><option value="0x2"></option>
+        </datalist>
+        <label><span data-i18n="otaApiVersion"></span><input id="otaApiVersion" list="otaApiVersions" maxlength="80" value="11.1.0.2"></label>
+        <datalist id="otaApiVersions">
+          <option value="1.16.2.28"></option><option value="11.1.0.2"></option><option value="V11.1.0.2_251229"></option>
+        </datalist>
+      </div>
+      <div class="lab__row">
+        <label class="ota-api__helper"><span data-i18n="otaApiHelper"></span><input id="otaApiHelperUrl" type="url" value="http://127.0.0.1:8765/ota-helper.php" autocomplete="off"></label>
+        <label class="ota-api__token"><span data-i18n="otaApiToken"></span><input id="otaApiHelperToken" type="password" autocomplete="off"></label>
+        <button id="btnOtaApiCheck" class="btn" disabled data-i18n="otaApiSend"></button>
+      </div>
+      <label class="chk"><input id="otaApiConsent" type="checkbox"><span data-i18n="otaApiConsent"></span></label>
+      <p class="note" data-i18n="otaApiNoSchema"></p>
+      <a id="otaApiDownload" class="ota-api__download" target="_blank" rel="noopener noreferrer" hidden data-i18n="otaApiDownload"></a>
+      <pre id="otaApiResult" class="mono pre">—</pre>
+    </details>
     <pre id="labResult" class="mono pre">—</pre>
   </section>
   <section class="panel panel--wide">

@@ -20,6 +20,16 @@ function bindLab(){
   action('#btnExportResources',()=>exportResourcesZip());
   action('#btnExportManifest',()=>{if(!S.resManifest)throw new Error('Сначала выполните поиск или выгрузку ресурсов');download('resources-manifest.json',S.resManifest)});
   action('#btnOtaProbe',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');if(labBusy())throw new Error('Другая операция уже выполняется');await otaProbe()});
+  $('#otaApiConsent').addEventListener('change',renderLab);
+  $('#otaApiEndpoint').addEventListener('change',renderLab);
+  $('#btnOtaApiCheck').onclick=async()=>{
+    if(!$('#otaApiConsent').checked)return toast(t('otaApiConsent'),'warn');
+    $('#otaApiResult').textContent='…';$('#otaApiDownload').hidden=true;
+    try{
+      const result=await requestOtaApiCheck({helperUrl:$('#otaApiHelperUrl').value,token:$('#otaApiHelperToken').value,
+        endpointId:$('#otaApiEndpoint').value,model:$('#otaApiModel').value,version:$('#otaApiVersion').value});
+      renderOtaApiResult(result);log('EV','',null,`OTA API request sent to ${result.endpointId}; HTTP ${result.upstreamStatus}`)}
+    catch(e){renderOtaApiResult({ok:false,error:e.message});log('EV','',null,'OTA API request ✕ '+e.message);toast(e.message,'warn')}};
   action('#btnScreen',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');const result=await readScreen();S.labScreen=result;renderLab()});
   action('#btnHealth',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');await readHealth()});
   action('#btnTime',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');await syncTime()});
@@ -32,9 +42,12 @@ function renderLab(){
   const active=labBusy(),ready=labConnected();
   for(const id of['#btnRaw','#btnBrowse','#btnSmallList','#btnFetchResources','#btnOtaProbe','#btnScreen','#btnHealth','#btnTime','#btnSendImage'])
     $(id).disabled=!ready||active;
+  $('#btnOtaApiCheck').disabled=!$('#otaApiConsent').checked||OTA_API_REQUEST.running;
   $('#btnExportResources').disabled=!S.res.length;
   $('#btnExportManifest').disabled=!S.resManifest;
   $('#btnExportMatrix').disabled=false;
+  const otaEndpoint=otaApiEndpoint($('#otaApiEndpoint').value);
+  $('#otaApiEndpointUrl').textContent=otaEndpoint?otaEndpoint.url:'—';
   const rows=[
     S.labScreen&&`screen: ${JSON.stringify(S.labScreen)}`,
     S.health&&`health (SDK stub): ${JSON.stringify(S.health)}`,

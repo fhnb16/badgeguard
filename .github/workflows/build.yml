@@ -32,6 +32,7 @@ jobs:
           path: |
             dist/
             dist-single/
+            ota-helper.php
           if-no-files-found: error
 
   sync-distributions:
@@ -51,7 +52,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- dist dist-single
+          git add -- dist dist-single ota-helper.php
           if git diff --cached --quiet; then
             echo "Generated distributions are already up to date."
           else
@@ -77,10 +78,13 @@ jobs:
           version="${GITHUB_REF_NAME//\//-}"
           pwa_zip="badgeguard-pwa-${version}.zip"
           standalone_html="badgeguard-standalone-${version}.html"
+          ota_helper="ota-helper.php"
           (cd dist && zip -qr "../${pwa_zip}" .)
           cp dist-single/index.html "${standalone_html}"
+          cp ota-helper.php "${ota_helper}"
           echo "pwa_zip=${pwa_zip}" >> "$GITHUB_OUTPUT"
           echo "standalone_html=${standalone_html}" >> "$GITHUB_OUTPUT"
+          echo "ota_helper=${ota_helper}" >> "$GITHUB_OUTPUT"
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -90,11 +94,13 @@ jobs:
             gh release upload "$GITHUB_REF_NAME" \
               "${{ steps.release_files.outputs.pwa_zip }}" \
               "${{ steps.release_files.outputs.standalone_html }}" \
+              "${{ steps.release_files.outputs.ota_helper }}" \
               --clobber
           else
             gh release create "$GITHUB_REF_NAME" \
               "${{ steps.release_files.outputs.pwa_zip }}" \
               "${{ steps.release_files.outputs.standalone_html }}" \
+              "${{ steps.release_files.outputs.ota_helper }}" \
               --title "BadgeGuard ${GITHUB_REF_NAME}" \
               --generate-notes
           fi
