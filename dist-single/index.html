@@ -285,8 +285,8 @@ h2,h3{margin:0;font-weight:600}
         </datalist>
       </div>
       <div class="lab__row">
-        <label class="ota-api__helper"><span data-i18n="otaApiHelper"></span><input id="otaApiHelperUrl" type="url" value="http://127.0.0.1:8765/ota-helper.php" autocomplete="off"></label>
-        <label class="ota-api__token"><span data-i18n="otaApiToken"></span><input id="otaApiHelperToken" type="password" autocomplete="off"></label>
+        <label class="ota-api__helper"><span data-i18n="otaApiHelper"></span><input id="otaApiHelperUrl" type="text" value="ota-helper.php" autocomplete="off"></label>
+        <label id="otaApiTokenField" class="ota-api__token" hidden><span data-i18n="otaApiToken"></span><input id="otaApiHelperToken" type="password" maxlength="256" autocomplete="off"></label>
         <button id="btnOtaApiCheck" class="btn" disabled data-i18n="otaApiSend"></button>
       </div>
       <label class="chk"><input id="otaApiConsent" type="checkbox"><span data-i18n="otaApiConsent"></span></label>
@@ -1211,7 +1211,8 @@ const T={conn:['Подключить','Connect'],disc:['Отключить','Dis
   otaApiTitle:['Запрос обновления из облака ZRun / JieLi','Check firmware availability via ZRun / JieLi cloud'],
   otaApiNote:['Один POST только по явному нажатию. В PHP helper отправляются ID выбранного endpoint и model/version; helper сам формирует SDK-заголовки. authKey и файл прошивки не передаются. Ответ не прошивается автоматически.','One POST per explicit click. The selected endpoint ID and model/version go to the PHP helper, which builds the SDK headers. authKey and firmware files are not sent. Responses are never flashed automatically.'],
   otaApiEndpoint:['Endpoint','Endpoint'],otaApiModel:['model (не authKey)','model (not authKey)'],otaApiVersion:['Версия устройства','Device version'],
-  otaApiHelper:['URL PHP helper','PHP helper URL'],otaApiToken:['Токен удалённого helper','Remote helper token'],
+  otaApiHelper:['URL PHP helper (относительный путь поддерживается)','PHP helper URL (relative paths supported)'],
+  otaApiToken:['Токен удалённого helper','Cross-origin helper token'],
   otaApiSend:['Отправить один запрос','Send one request'],
   otaApiConsent:['Я понимаю, что выбранные model/version будут отправлены выбранному endpoint через PHP helper.','I understand the selected model/version will be sent to the chosen endpoint through the PHP helper.'],
   otaApiNoSchema:['JieLi URL отключены: формат запроса не подтверждён. Ссылки на APK/репозитории — источники файлов, а не OTA API. Не вводите authKey в поле model. Успешный ответ API не подтверждает совместимость образа; проверяйте его отдельно перед загрузкой в устройство.','JieLi URLs are disabled because their request schema is unverified. APK/repository links are file sources, not OTA APIs. Do not enter authKey as model. An API response does not establish firmware compatibility; validate any image separately before device use.'],
@@ -2166,21 +2167,21 @@ function buildOtaApiRequest(endpointId,model,version){
   const safeModel=clean(model,'model');
   if(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{16}$/.test(safeModel))throw new Error('model похож на authKey и не будет отправлен');
   return{endpointId,model:safeModel,version:clean(version,'version')}}
-function normalizeOtaHelperUrl(value){
-  let url;try{url=new URL(String(value||'').trim())}catch{throw new Error('Укажите полный URL PHP-помощника')}
-  const host=url.hostname.toLowerCase(),local=['127.0.0.1','localhost','[::1]','::1'].includes(host);
-  if(url.protocol!=='https:'&&!(url.protocol==='http:'&&local))throw new Error('Удалённый PHP-помощник должен использовать HTTPS');
+function normalizeOtaHelperUrl(value,base=globalThis.location?.href||'http://127.0.0.1:8765/'){
+  let url,page;try{page=new URL(base);url=new URL(String(value||'').trim(),page)}catch{throw new Error('Укажите URL PHP-помощника')}
+  const host=url.hostname.toLowerCase(),local=['127.0.0.1','localhost','[::1]','::1'].includes(host),sameOrigin=url.origin===page.origin;
+  if(url.protocol!=='https:'&&!(url.protocol==='http:'&&local&&page.protocol==='http:'))throw new Error('Удалённый PHP-помощник должен использовать HTTPS');
   if(url.username||url.password||url.search||url.hash||!url.pathname.endsWith('/ota-helper.php'))throw new Error('URL должен указывать на ota-helper.php без логина, query и fragment');
-  return{url:url.href,remote:!local}}
+  return{url:url.href,remote:!sameOrigin}}
 async function requestOtaApiCheck({helperUrl,token,endpointId,model,version}){
   if(OTA_API_REQUEST.running)throw new Error('OTA API-запрос уже выполняется');
-  const target=normalizeOtaHelperUrl(helperUrl),payload=buildOtaApiRequest(endpointId,model,version),secret=String(token||'').trim();
+  const target=normalizeOtaHelperUrl(helperUrl,location.href),payload=buildOtaApiRequest(endpointId,model,version),secret=String(token||'').trim();
   if(target.remote&&secret.length<32)throw new Error('Для удалённого helper нужен токен не короче 32 символов');
   OTA_API_REQUEST.running=true;renderLab();
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
   try{
     const headers={'Content-Type':'application/json'};
-    if(secret)headers['X-BadgeGuard-Helper-Token']=secret;
+    if(target.remote)headers['X-BadgeGuard-Helper-Token']=secret;
     const response=await fetch(target.url,{method:'POST',headers,body:JSON.stringify(payload),credentials:'omit',
       cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',signal:controller.signal});
     const result=await response.json().catch(()=>null);
@@ -2689,6 +2690,7 @@ function bindLab(){
   action('#btnOtaProbe',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');if(labBusy())throw new Error('Другая операция уже выполняется');await otaProbe()});
   $('#otaApiConsent').addEventListener('change',renderLab);
   $('#otaApiEndpoint').addEventListener('change',renderLab);
+  $('#otaApiHelperUrl').addEventListener('input',renderLab);
   $('#btnOtaApiCheck').onclick=async()=>{
     if(!$('#otaApiConsent').checked)return toast(t('otaApiConsent'),'warn');
     $('#otaApiResult').textContent='…';$('#otaApiDownload').hidden=true;
@@ -2715,6 +2717,8 @@ function renderLab(){
   $('#btnExportMatrix').disabled=false;
   const otaEndpoint=otaApiEndpoint($('#otaApiEndpoint').value);
   $('#otaApiEndpointUrl').textContent=otaEndpoint?otaEndpoint.url:'—';
+  let helperTarget=null;try{helperTarget=normalizeOtaHelperUrl($('#otaApiHelperUrl').value,location.href)}catch{}
+  $('#otaApiTokenField').hidden=!helperTarget||!helperTarget.remote;
   const rows=[
     S.labScreen&&`screen: ${JSON.stringify(S.labScreen)}`,
     S.health&&`health (SDK stub): ${JSON.stringify(S.health)}`,
