@@ -74,6 +74,7 @@ h2,h3{margin:0;font-weight:600}
 .log li{white-space:pre-wrap;overflow-wrap:anywhere}.log .tx{color:var(--cyan)}.log .rx{color:var(--mag)}.log .ev{color:var(--mute)}
 .set{display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:.6rem 1rem}
 .set label{display:flex;flex-direction:column;gap:.2rem;font-size:.85rem;color:var(--mute)}.set .chk{flex-direction:row;color:var(--text)}
+.lab__row{display:flex;align-items:end;gap:.6rem;flex-wrap:wrap;margin:.6rem 0}.lab__row label{display:flex;flex-direction:column;gap:.25rem;color:var(--mute);font-size:.85rem}.lab__row .lab__frame{flex:1;min-width:min(100%,26rem)}.lab__file{flex:1;min-width:16rem}
 .set2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem}@media (max-width:800px){.set2{grid-template-columns:minmax(0,1fr)}}
 .set2 h3{font-size:1rem;margin-bottom:.4rem}
 .allow{display:flex;flex-wrap:wrap;gap:.4rem}.allow input{flex:1;min-width:12rem;font-family:var(--mono);font-size:12px}
@@ -161,6 +162,36 @@ h2,h3{margin:0;font-weight:600}
     <ol id="log" class="log mono" tabindex="0" aria-label="log"></ol>
   </section>
   <section class="panel panel--wide">
+    <h2 class="panel__h"><span class="panel__n">4</span><span data-i18n="deviceTools"></span></h2>
+    <div class="lab__row">
+      <label><span data-i18n="probeTransport"></span>
+        <select id="probeTransport"><option value="ae01">RCSP AE01 (FE)</option><option value="fd02">Sideband FD02 (9E)</option></select>
+      </label>
+      <label class="lab__frame"><span data-i18n="probeFrame"></span><input id="probeHex" class="inp mono" spellcheck="false" value="FE DC BA C0 03 00 06 01 FF FF FF FF 01 EF"></label>
+      <label><span data-i18n="probeTimeout"></span><input id="probeTimeout" type="number" min="500" max="10000" value="3000"></label>
+      <button id="btnRaw" class="btn" data-i18n="sendProbe"></button>
+      <button id="btnExportMatrix" class="btn">capability-matrix.json</button>
+    </div>
+    <p class="note" data-i18n="probeSafety"></p>
+    <pre id="rawResult" class="mono pre">—</pre>
+    <div class="row">
+      <button id="btnBrowse" class="btn" data-i18n="browseFiles"></button>
+      <button id="btnSmallList" class="btn" data-i18n="smallFiles"></button>
+      <button id="btnFetchResources" class="btn" data-i18n="fetchResources"></button>
+      <button id="btnExportResources" class="btn" data-i18n="exportResources"></button>
+      <button id="btnExportManifest" class="btn">resources-manifest.json</button>
+      <button id="btnOtaProbe" class="btn" data-i18n="otaProbe"></button>
+      <button id="btnScreen" class="btn" data-i18n="readScreen"></button>
+      <button id="btnHealth" class="btn" data-i18n="readHealth"></button>
+      <button id="btnTime" class="btn" data-i18n="syncTime"></button>
+    </div>
+    <div class="lab__row">
+      <label class="lab__file"><span data-i18n="contentImage"></span><input id="contentImage" type="file" accept="image/*"></label>
+      <button id="btnSendImage" class="btn" data-i18n="sendImage"></button>
+    </div>
+    <pre id="labResult" class="mono pre">—</pre>
+  </section>
+  <section class="panel panel--wide">
     <h2 class="panel__h"><span class="panel__n">⚙</span><span data-i18n="settings"></span></h2>
     <div class="set">
       <label><span data-i18n="s_connTo"></span><input type="number" data-set="connectTo" min="3000" max="60000" step="500"></label>
@@ -173,8 +204,6 @@ h2,h3{margin:0;font-weight:600}
       <label><span data-i18n="s_lang"></span><select data-set="lang"><option value="ru">Русский</option><option value="en">English</option></select></label>
       <label class="chk"><input type="checkbox" data-set="expert"><span data-i18n="s_expert"></span></label>
       <label class="chk"><input type="checkbox" data-set="chime"><span data-i18n="s_chime"></span></label>
-      <label><span data-i18n="s_dumpSize"></span><select data-set="dumpSize"><option value="65536">64 KiB (проба)</option><option value="1048576">1 MiB</option><option value="2097152">2 MiB</option><option value="4194304">4 MiB</option><option value="8388608">8 MiB</option></select></label>
-      <label><span data-i18n="s_dumpChunk"></span><input type="number" data-set="dumpChunk" min="16" max="1024" step="16"></label>
       <label class="chk"><input type="checkbox" data-set="rcspPreAuth"><span data-i18n="s_preAuth"></span></label>
       <label class="chk"><input type="checkbox" data-set="readbackOffer"><span data-i18n="s_rbOffer"></span></label>
       <label><span data-i18n="s_spotN"></span><input type="number" data-set="spotN" min="4" max="64"></label>
@@ -448,6 +477,71 @@ function functionE1test(key6, input16, seed16) {
 }
 
 
+/* ---- src/core/registry.js ---- */
+/* ===== core/registry — авторитетный реестр RCSP =====
+ * Данные: data/rcsp-opcodes.json (Jieli-Tech/fw-AC63_BT_SDK, Apache-2.0 + порты MIT).
+ * Не редактировать вручную: файл генерируется tools/gen-registry.mjs из артефакта.
+ * confidence: sdk-source > capture-verified > ported-tool > unverified. */
+const RCSP_REF={"artifact":"rcsp-opcodes.json","generated_utc":"2026-11-15","target":{"device":"E87 / L8 round BLE badge (Zrun)","soc":"JieLi AC697N","core":"BR30","arch":"pi32v2","note":"AC707N/BR35 (ElectronicCats DG01) is a DIFFERENT chip. Opcodes below are the generic RCSP layer shared by both; chip-specific Qix opcodes (0xA0/0xAA) and FD00 are NOT applicable."},"provenance":{"authoritative":{"repo":"https://github.com/Jieli-Tech/fw-AC63_BT_SDK","license":"Apache-2.0","commit_branch":"master","files":["include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","apps/common/third_party_profile/jieli/JL_rcsp/rcsp_updata/rcsp_user_update.h","include_lib/btstack/third_party/rcsp/JL_rcsp_packet.h"]},"wire_semantics":[{"repo":"https://github.com/ElectronicCats/jieli-ble-badge-research","path":"tools/qix-ble/qix_ble/rcsp_session.py","license":"MIT"},{"repo":"https://github.com/Manaiakalani/auracast","path":"web/src/lib/e87-protocol.ts","license":"MIT"},{"repo":"https://github.com/guan4tou2/ebadge-python-cli","path":"ebadge_cli/rcsp_transfer.py","license":"MIT","note":"Upstream of the qix-ble port; not in the original backlog."}]},"framing":{"outer":{"start_tag":["0xFE","0xDC","0xBA"],"end_tag":"0xEF","layout":"FE DC BA | flags:1 | opcode:1 | length:2 BE | body[length] | EF","head_bitfield":{"c_struct":"u16 { _OpCode:8; _unsed:6; _resp:1; _type:1 }","wire_order":"big-endian: byte0 = [_type:1][_resp:1][unused:6], byte1 = OpCode","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_packet.h"},"flags":{"0xC0":"command, response requested (phone request; also device-initiated cmd)","0x80":"command, no response requested (device push)","0x00":"response (device reply, or phone ACK to a device push)"},"length_covers":"body only (sn/status + payload), excludes tags/flags/opcode/length"},"inner":{"command":"sn:1 [inner_opcode:1 if opcode==0x01] payload","response":"status:1 sn:1 [inner_opcode:1 if opcode==0x01] payload"},"other_namespace":{"sync_byte":"0x9E","where":"FD01/FD02/FD05 characteristics (watch-style protocol), NOT the FE RCSP path","warning":"A 0x00 status on the 9E channel is an acceptance echo, not execution."},"mtu":{"JL_MTU_RESV":540,"JL_MTU_SEND":128,"observed_e87":"ATT MTU 517 negotiated; app data chunk 490 bytes"}},"dev_handlers":{"0":"USB","1":"SD0","2":"SD1","3":"Flash"},"opcodes":[{"code":"0x01","code_int":1,"sdk_name":"JL_OPCODE_DATA","name":"DATA (push envelope)","direction":"both","request":"sn:1 + inner_opcode:1 + payload","response":"status:1 + sn:1 + inner_opcode:1 + payload","semantics":"Carrier for unsolicited device pushes. inner_opcode identifies the owning command (e.g. 0x0C for file-browse entry chunks).","confidence":"capture-verified","source":"qix-ble tests/test_rcsp_session_browse.py packets 597/598"},{"code":"0x02","code_int":2,"sdk_name":"JL_OPCODE_GET_TARGET_FEATURE_MAP","name":"GET_TARGET_FEATURE_MAP","direction":"phone->dev","request":"sn:1 (no params)","response":"status:1 + sn:1 + mask:4 BE","semantics":"32-bit capability bitmask. This is where a reported file_transfer=0x00000007 comes from (bits 0,1,2).","confidence":"ported-tool","source":"auracast e87-protocol.ts getTargetFeatureMapE87"},{"code":"0x03","code_int":3,"sdk_name":"JL_OPCODE_GET_TARGET_FEATURE","name":"GET_TARGET_INFO","direction":"phone->dev","request":"sn:1 + mask:4 BE + platform:1","response":"status:1 + sn:1 + TLV attrs (ATTR_TYPE_*)","semantics":"Static device info: version, EDR/BLE addr, VID/PID, authkey, procode, max MTU.","confidence":"sdk-source","source":"JL_rcsp_protocol.h ATTR_TYPE_* + rcsp_bluetooth.c"},{"code":"0x04","code_int":4,"sdk_name":"(removed)","name":"SWITCH_DEVICE (historical)","confidence":"sdk-source","semantics":"Commented out in the header; 0x0B is SWITCH_DEVICE now. Do not use.","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h"},{"code":"0x06","code_int":6,"sdk_name":"JL_OPCODE_DISCONNECT_EDR","name":"DISCONNECT_EDR","direction":"phone->dev","request":"sn:1 + params","response":"status:1 + sn:1","semantics":"On E87 the app sends body [0x02,0x00,0x01] as Phase-1 bootstrap (described upstream as 'reset auth flag'). Repurpose with care.","confidence":"ported-tool","source":"ebadge-python-cli rcsp_transfer.py Phase 1"},{"code":"0x07","code_int":7,"sdk_name":"JL_OPCODE_SYS_INFO_GET","name":"SYS_INFO_GET","direction":"phone->dev","request":"sn:1 + function:1 + mask:4 BE","response":"status:1 + sn:1 + function:1 + TLV attrs (COMMON_INFO_ATTR_*)","semantics":"Runtime info. function=0 -> common (battery attr 0). mask selects attrs by BIT(attr).","confidence":"sdk-source","source":"rcsp_bluetooth.c common_function_info()"},{"code":"0x08","code_int":8,"sdk_name":"JL_OPCODE_SYS_INFO_SET","name":"SYS_INFO_SET","direction":"phone->dev","request":"sn:1 + function:1 + TLV attrs","response":"status:1 + sn:1","confidence":"sdk-source","source":"JL_rcsp_protocol.h"},{"code":"0x09","code_int":9,"sdk_name":"JL_OPCODE_SYS_INFO_AUTO_UPDATE","name":"SYS_INFO_AUTO_UPDATE","direction":"dev->phone","request":"sn:1 + function:1 + TLV attrs","semantics":"Unsolicited info push; phone should ACK.","confidence":"sdk-source","source":"JL_rcsp_protocol.h"},{"code":"0x0A","code_int":10,"sdk_name":"JL_OPCODE_CALL_REQUEST","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_CALL_REQUEST"},{"code":"0x0B","code_int":11,"sdk_name":"JL_OPCODE_SWITCH_DEVICE","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SWITCH_DEVICE"},{"code":"0x0C","code_int":12,"sdk_name":"JL_OPCODE_FILE_BROWSE_REQUEST_START","name":"FILE_BROWSE_REQUEST_START","direction":"phone->dev","request":"sn:1 + type:1 + readNum:1 + startIndex:2 BE + devHandler:4 BE + pathLen:2 (LE per capture / BE per SDK comment) + path:(N*4 BE)","response":"status:1 + sn:1 (ack only; entries arrive as 0x01 pushes)","semantics":"type 0=folder,1=file. devHandler 0=USB,1=SD0,2=SD1,3=Flash. Entries stream back as opcode 0x01 with inner_opcode 0x0C; each push MUST be ACKed; device ends with 0x0D.","confidence":"capture-verified","source":"qix-ble rcsp_session.browse() + packet 590 KAT"},{"code":"0x0D","code_int":13,"sdk_name":"JL_OPCODE_FILE_BROWSE_REQUEST_STOP","name":"FILE_BROWSE_REQUEST_STOP","direction":"both","request":"sn:1 + reason:1","response":"status:1 + sn:1","semantics":"Device sends this to terminate a browse session; phone must ACK it or the session stays open and later commands stall.","confidence":"capture-verified","source":"packet 598 KAT"},{"code":"0x0E","code_int":14,"sdk_name":"JL_OPCODE_FUNCTION_CMD","name":"FUNCTION_CMD","direction":"phone->dev","request":"sn:1 + function-specific","confidence":"sdk-source","source":"JL_rcsp_protocol.h"},{"code":"0x12","code_int":18,"sdk_name":"JL_OPCODE_SYS_OPEN_BT_SCAN","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SYS_OPEN_BT_SCAN"},{"code":"0x13","code_int":19,"sdk_name":"JL_OPCODE_SYS_UPDATE_BT_STATUS","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SYS_UPDATE_BT_STATUS"},{"code":"0x14","code_int":20,"sdk_name":"JL_OPCODE_SYS_STOP_BT_SCAN","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SYS_STOP_BT_SCAN"},{"code":"0x15","code_int":21,"sdk_name":"JL_OPCODE_SYS_BT_CONNECT_SPEC","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SYS_BT_CONNECT_SPEC"},{"code":"0x19","code_int":25,"sdk_name":"JL_OPCODE_SYS_FIND_DEVICE","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SYS_FIND_DEVICE"},{"code":"0x1A","code_int":26,"sdk_name":"JL_OPCODE_EXTRA_FLASH_OPT","name":"EXTRA_FLASH_OPT","direction":"phone->dev","semantics":"External flash operations. NOT a general flash read primitive on stock FW.","confidence":"unverified","source":"JL_rcsp_protocol.h"},{"code":"0x1B","code_int":27,"sdk_name":"JL_OPCODE_FILE_TRANSFER_START","name":"FILE_TRANSFER_START","direction":"phone->dev","request":"sn:1 + transfer metadata (path/size)","response":"status:1 + sn:1","semantics":"Phase 8 of the E87 upload flow; also used to negotiate large-file reads.","confidence":"ported-tool","source":"ebadge-python-cli rcsp_transfer.py Phase 8"},{"code":"0x1C","code_int":28,"sdk_name":"JL_OPCODE_FILE_TRANSFER_END","name":"FILE_TRANSFER_END","direction":"both","request":"sn:1","response":"status:1 + sn:1","semantics":"Phase 10 completion (paired with 0x20).","confidence":"ported-tool","source":"ebadge-python-cli rcsp_transfer.py"},{"code":"0x1D","code_int":29,"sdk_name":"JL_OPCODE_FILE_TRANSFER","name":"FILE_TRANSFER (window data/ACK)","direction":"both","request":"sn:1 + window payload","response":"status:1 + sn:1 + window ack","semantics":"Phase 9 windowed data. Do NOT auto-ACK blindly; window accounting matters.","confidence":"ported-tool","source":"ebadge-python-cli rcsp_transfer.py"},{"code":"0x1E","code_int":30,"sdk_name":"JL_OPCODE_FILE_TRANSFER_CANCEL","name":"FILE_TRANSFER_CANCEL","direction":"phone->dev","request":"sn:1","confidence":"sdk-source","source":"JL_rcsp_protocol.h"},{"code":"0x1F","code_int":31,"sdk_name":"JL_OPCODE_FILE_DELETE","name":"FILE_DELETE","direction":"phone->dev","confidence":"sdk-source","source":"JL_rcsp_protocol.h"},{"code":"0x20","code_int":32,"sdk_name":"JL_OPCODE_FILE_RENAME","name":"FILE_RENAME / FILE_COMPLETE","direction":"both","semantics":"SDK names 0x20 FILE_RENAME; the E87 app flow uses 0x20 as the device-initiated FILE_COMPLETE handshake. Same byte, context-dependent.","confidence":"capture-verified","source":"JL_rcsp_protocol.h vs ebadge-python-cli rcsp_transfer.py Phase 10"},{"code":"0x21","code_int":33,"sdk_name":"JL_OPCODE_ACTION_PREPARE","name":"ACTION_PREPARE / SESSION_OPEN","direction":"phone->dev","semantics":"SDK: APP operation pre-processing. E87 flow: Phase 6 session open, prerequisite for 0x27/0x1B.","confidence":"ported-tool","source":"ebadge-python-cli rcsp_transfer.py Phase 6"},{"code":"0x22","code_int":34,"sdk_name":"JL_OPCODE_DEVICE_FORMAT","name":"DEVICE_FORMAT","direction":"phone->dev","semantics":"DESTRUCTIVE. Never send during probing.","confidence":"sdk-source","source":"JL_rcsp_protocol.h"},{"code":"0x23","code_int":35,"sdk_name":"JL_OPCODE_ONE_FILE_DELETE","name":"ONE_FILE_DELETE","direction":"phone->dev","semantics":"DESTRUCTIVE.","confidence":"sdk-source","source":"JL_rcsp_protocol.h"},{"code":"0x24","code_int":36,"sdk_name":"JL_OPCODE_ONE_FILE_TRANS_BACK","name":"ONE_FILE_TRANS_BACK","direction":"phone->dev","semantics":"Device->phone single-file return. Candidate path for resource extraction; wire layout not yet confirmed on BR30.","confidence":"unverified","source":"JL_rcsp_protocol.h"},{"code":"0x25","code_int":37,"sdk_name":"JL_OPCODE_ALARM_EXTRA","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_ALARM_EXTRA"},{"code":"0x26","code_int":38,"sdk_name":"JL_OPCODE_FILE_BLUK_TRANSFER","name":"FILE_BLUK_TRANSFER","direction":"phone->dev","semantics":"Bulk large-file preparation.","confidence":"sdk-source","source":"JL_rcsp_protocol.h"},{"code":"0x27","code_int":39,"sdk_name":"JL_OPCODE_DEVICE_PARM_EXTRA","name":"DEVICE_PARM_EXTRA / XFER_PARAMS","direction":"both","semantics":"Extended params for transfer/delete/format. E87 Phase 7. Also observed carrying battery pushes in the 9E/FD02 namespace.","confidence":"ported-tool","source":"ebadge-python-cli rcsp_transfer.py Phase 7"},{"code":"0x28","code_int":40,"sdk_name":"JL_OPCODE_SIMPLE_FILE_TRANS","name":"SIMPLE_FILE_TRANS (small files)","direction":"phone->dev","request":"sn:1 + op:1 + type:1 [+ id:2 BE + offset:2 BE + len:2 BE + flag:1]","response":"op=0 query: [status][sn][version?] + N*(id:2 BE, size:2 BE); op=1 read: [ret][crc_hi][crc_lo][data] OR [op][ret][crc_hi][crc_lo][data]","semantics":"op 0x00=query list by type, 0x01=read, delete also via this opcode. Max read len 0xFFFF. Two response shapes exist — detect by p[0]==0 vs p[1]==0.","confidence":"ported-tool","source":"auracast e87-protocol.ts listSmallFilesE87/readSmallFileE87 + qix-ble read_small_file"},{"code":"0xA0","code_int":160,"sdk_name":"JL_OPCODE_SPORTS_DATA_INFO_GET","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SPORTS_DATA_INFO_GET"},{"code":"0xA1","code_int":161,"sdk_name":"JL_OPCODE_SPORTS_DATA_INFO_SET","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SPORTS_DATA_INFO_SET"},{"code":"0xA2","code_int":162,"sdk_name":"JL_OPCODE_SPORTS_DATA_INFO_AUTO_UPDATE","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SPORTS_DATA_INFO_AUTO_UPDATE"},{"code":"0xA3","code_int":163,"sdk_name":"JL_OPCODE_SENSOR_LOG_DATA_AUTO_UPDATE","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SENSOR_LOG_DATA_AUTO_UPDATE"},{"code":"0xA4","code_int":164,"sdk_name":"JL_OPCODE_SENSOR_NFC_FUNCTION_OPT","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SENSOR_NFC_FUNCTION_OPT"},{"code":"0xA5","code_int":165,"sdk_name":"JL_OPCODE_SPORTS_DATA_INFO_OPT","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SPORTS_DATA_INFO_OPT"},{"code":"0xA6","code_int":166,"sdk_name":"JL_OPCODE_SPORTS_DATA_SYNC","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SPORTS_DATA_SYNC"},{"code":"0xD1","code_int":209,"sdk_name":"JL_OPCODE_NOTIFY_MTU","name":"NOTIFY_MTU","direction":"both","confidence":"sdk-source","source":"JL_rcsp_protocol.h"},{"code":"0xD3","code_int":211,"sdk_name":"JL_OPCODE_SYS_EMITTER_BT_CONNECT_STATUS","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_SYS_EMITTER_BT_CONNECT_STATUS"},{"code":"0xD4","code_int":212,"sdk_name":"JL_OPCODE_GET_MD5","name":"GET_MD5","direction":"phone->dev","semantics":"MD5 of a device region/file — useful to verify a dump without pulling it.","confidence":"unverified","source":"JL_rcsp_protocol.h"},{"code":"0xD5","code_int":213,"sdk_name":"JL_OPCODE_LOW_LATENCY_PARAM","confidence":"sdk-source","source":"include_lib/btstack/third_party/rcsp/JL_rcsp_protocol.h","name":"JL_OPCODE_LOW_LATENCY_PARAM"},{"code":"0xD6","code_int":214,"sdk_name":"JL_OPTCODE_EXTRA_FLASH_INFO","name":"EXTRA_FLASH_INFO","direction":"phone->dev","confidence":"unverified","source":"JL_rcsp_protocol.h"},{"code":"0xFF","code_int":255,"sdk_name":"JL_OPCODE_CUSTOMER_USER","name":"CUSTOMER_USER","direction":"both","semantics":"Vendor-custom opcode. WARNING: on the E87 a 0xFF/0x00 status echo is NOT proof of execution. Only a real data frame counts as success.","confidence":"capture-verified","source":"JL_rcsp_protocol.h + BadgeGuard field notes"}],"ota_opcodes":[{"code":"0xE1","code_int":225,"sdk_name":"JL_OPCODE_GET_DEVICE_UPDATE_FILE_INFO_OFFSET","name":"GET_DEVICE_UPDATE_FILE_INFO_OFFSET","request":"sn:1 + file info (version/pid/vid/ext)","response":"status:1 + sn:1 + offset:4","semantics":"Resume point for a partial update.","confidence":"sdk-source","source":"apps/common/third_party_profile/jieli/JL_rcsp/rcsp_updata/rcsp_user_update.h"},{"code":"0xE2","code_int":226,"sdk_name":"JL_OPCODE_INQUIRE_DEVICE_IF_CAN_UPDATE","name":"INQUIRE_DEVICE_IF_CAN_UPDATE","request":"sn:1 + update_type:1","response":"status:1 + sn:1 + can_update_flag:1","semantics":"READ-ONLY probe. In fw-AC63_BT_SDK the version comparison is #if 0'd out and can_update_flag is set to UPDATE_FLAG_OK unconditionally, so a stock build answers OK regardless of the image. DEV_UPDATE_FILE_INFO_LEN is 0, so only data[0] (type) is read.","confidence":"sdk-source","source":"apps/common/third_party_profile/jieli/JL_rcsp/rcsp_updata/rcsp_user_update.h"},{"code":"0xE3","code_int":227,"sdk_name":"JL_OPCODE_ENTER_UPDATE_MODE","name":"ENTER_UPDATE_MODE","request":"sn:1","response":"status:1 + sn:1","semantics":"Arms the update state machine.","confidence":"sdk-source","source":"apps/common/third_party_profile/jieli/JL_rcsp/rcsp_updata/rcsp_user_update.h"},{"code":"0xE4","code_int":228,"sdk_name":"JL_OPCODE_EXIT_UPDATE_MODE","name":"EXIT_UPDATE_MODE","request":"sn:1","response":"status:1 + sn:1","semantics":"Handler is a no-op print in this SDK.","confidence":"sdk-source","source":"apps/common/third_party_profile/jieli/JL_rcsp/rcsp_updata/rcsp_user_update.h"},{"code":"0xE5","code_int":229,"sdk_name":"JL_OPCODE_SEND_FW_UPDATE_BLOCK","name":"SEND_FW_UPDATE_BLOCK","request":"sn:1 + block data","response":"status:1 + sn:1","semantics":"Pull model: device requests blocks via onReadData(offset,size); host does not push blindly.","confidence":"sdk-source","source":"apps/common/third_party_profile/jieli/JL_rcsp/rcsp_updata/rcsp_user_update.h"},{"code":"0xE6","code_int":230,"sdk_name":"JL_OPCODE_GET_DEVICE_REFRESH_FW_STATUS","name":"GET_DEVICE_REFRESH_FW_STATUS","request":"sn:1","response":"status:1 + sn:1 + progress/state","semantics":"Also drives UPDATA_STOP in the block handler.","confidence":"sdk-source","source":"apps/common/third_party_profile/jieli/JL_rcsp/rcsp_updata/rcsp_user_update.h"},{"code":"0xE7","code_int":231,"sdk_name":"JL_OPCODE_SET_DEVICE_REBOOT","name":"SET_DEVICE_REBOOT","request":"sn:1","response":"status:1 + sn:1","semantics":"Reboot into new image.","confidence":"sdk-source","source":"apps/common/third_party_profile/jieli/JL_rcsp/rcsp_updata/rcsp_user_update.h"},{"code":"0xE8","code_int":232,"sdk_name":"JL_OPCODE_NOTIFY_UPDATE_CONENT_SIZE","name":"NOTIFY_UPDATE_CONENT_SIZE","request":"sn:1 + size:4","response":"status:1 + sn:1","semantics":"Total update content size (sic: CONENT in the SDK).","confidence":"sdk-source","source":"apps/common/third_party_profile/jieli/JL_rcsp/rcsp_updata/rcsp_user_update.h"}],"attr_types_target_info":{"0x00":"ATTR_TYPE_PROTOCOL_VERSION","0x01":"ATTR_TYPE_SYS_INFO","0x02":"ATTR_TYPE_EDR_ADDR","0x03":"ATTR_TYPE_PLATFORM","0x04":"ATTR_TYPE_FUNCTION_INFO","0x05":"ATTR_TYPE_DEV_VERSION","0x06":"ATTR_TYPE_SDK_TYPE","0x07":"ATTR_TYPE_UBOOT_VERSION","0x08":"ATTR_TYPE_DOUBLE_PARITION","0x09":"ATTR_TYPE_UPDATE_STATUS","0x0A":"ATTR_TYPE_DEV_VID_PID","0x0B":"ATTR_TYPE_DEV_AUTHKEY","0x0C":"ATTR_TYPE_DEV_PROCODE","0x0D":"ATTR_TYPE_DEV_MAX_MTU","0x11":"ATTR_TEYP_BLE_ADDR","0x13":"ATTR_TYPE_MD5_GAME_SUPPORT"},"attr_types_common_info":{"0x00":"COMMON_INFO_ATTR_BATTERY","0x01":"COMMON_INFO_ATTR_VOL","0x02":"COMMON_INFO_ATTR_DEV","0x03":"COMMON_INFO_ATTR_ERR_REPORT","0x04":"COMMON_INFO_ATTR_EQ","0x05":"COMMON_INFO_ATTR_FILE_BROWSE_TYPE","0x06":"COMMON_INFO_ATTR_FUN_TYPE","0x07":"COMMON_INFO_ATTR_LIGHT","0x08":"COMMON_INFO_ATTR_FMTX","0x0B":"COMMON_INFO_ATTR_HIGH_LOW_SET","0x0C":"COMMON_INFO_ATTR_PRE_FETCH_ALL_EQ_INFO","0x0D":"COMMON_INFO_ATTR_ANC_VOICE","0x0E":"COMMON_INFO_ATTR_FETCH_ALL_ANC_VOICE","0x0F":"COMMON_INFO_ATTR_PHONE_SCO_STATE_INFO"},"status_codes":{"authoritative_sdk":{"0x00":"JL_PRO_STATUS_SUCCESS","0x01":"JL_PRO_STATUS_FAIL","0x02":"JL_PRO_STATUS_UNKOWN_CMD","0x03":"JL_PRO_STATUS_BUSY","0x04":"JL_PRO_STATUS_NO_RESPONSE","0x05":"JL_PRO_STATUS_CRC_ERR","0x06":"JL_PRO_STATUS_ALL_DATA_CRC_ERR","0x07":"JL_PRO_STATUS_PARAM_ERR","0x08":"JL_PRO_STATUS_RESP_DATA_OVER_LIMIT"},"conflicting_upstream_ts":{"0x00":"SUCCESS","0x01":"UNKNOWN_ERROR","0x02":"NOT_SUPPORTED","0x03":"DATA_ERROR","0x04":"TIMEOUT","0x05":"REJECTED","verdict":"DO NOT USE. auracast e87-protocol.ts RCSP_STATUS_NAMES disagrees with the SDK enum from 0x02 up (SDK: UNKOWN_CMD, BUSY, NO_RESPONSE, CRC_ERR). Decode with authoritative_sdk."}},"jl_err_transport":{"0x00":"JL_ERR_NONE","0x01":"JL_ERR_SEND_DATA_OVER_LIMIT","0x02":"JL_ERR_SEND_BUSY","0x03":"JL_ERR_SEND_NOT_READY","0x04":"JL_ERR_EXIT"},"file_browse":{"entry_layout":"header:1 | cluster:4 BE | file_num:2 BE | name_len:1 | name:N","header_bits":{"bit0":"1=file, 0=folder","bit1":"1=ASCII, 0=UTF-16LE","bits2-6":"dev_index (storage device)"},"open_question":"pathLen endianness: real Zrun capture sends 04 00 (LE) for a 4-byte path; JieLi's own server code reportedly uses app_ntohs (BE). Undecidable with clusters=[] (both encode 00 00). Test with a 1-cluster path on hardware."},"not_applicable_to_br30":{"0xA0/0xAA Qix opcodes":"AC707N/BR35 DG01 only","FD00 characteristic":"absent on E87/AC697N","chipkey 0x9847":"ElectronicCats unit; per-unit value, never reuse"}};
+
+/* ---- src/core/opmap.js ---- */
+/* ===== core/opmap — производные карты реестра + класс безопасности =====
+ * Всё, что здесь есть, выводится из RCSP_REF (data/rcsp-opcodes.json) либо из
+ * вендорского JL_rcsp_protocol.h. Никаких «угаданных» опкодов.
+ */
+const OP_ALL=[...RCSP_REF.opcodes,...RCSP_REF.ota_opcodes];
+const OP_BY_CODE=Object.fromEntries(OP_ALL.map(o=>[o.code_int,o]));
+const opInfo=c=>OP_BY_CODE[c&255]||null;
+const opName=c=>{const o=opInfo(c);return o?(o.name||o.sdk_name):'UNKNOWN_'+hx(c)};
+const ATTR_TI=Object.fromEntries(Object.entries(RCSP_REF.attr_types_target_info).map(([k,v])=>[parseInt(k),v]));
+const ATTR_CI=Object.fromEntries(Object.entries(RCSP_REF.attr_types_common_info).map(([k,v])=>[parseInt(k),v]));
+// JL_PRO_STATUS — вендорский enum. Апстрим-TS (auracast) врёт начиная с 0x02, см. data/bitfields.md §8.
+const RCSP_STATUS=Object.fromEntries(Object.entries(RCSP_REF.status_codes.authoritative_sdk).map(([k,v])=>[parseInt(k),v.replace('JL_PRO_STATUS_','')]));
+const statusName=s=>RCSP_STATUS[s]||('0x'+(s??0).toString(16).toUpperCase());
+const JL_ERR=Object.fromEntries(Object.entries(RCSP_REF.jl_err_transport).map(([k,v])=>[parseInt(k),v]));
+const DEV_HANDLERS=Object.fromEntries(Object.entries(RCSP_REF.dev_handlers).map(([k,v])=>[parseInt(k),v]));
+const DEV_LIST=[0,1,2,3]; // USB, SD0, SD1, Flash — обход всех устройств (Фаза 2.2)
+
+// Ответы 0xE2 (UPDATE_FLAG_*) и 0xE6 (rcsp_update.c) — из SDK, не из угадываний
+const E2_FLAG={0:['OK — обновление возможно','OK — update accepted'],1:['Низкий заряд','Low battery'],2:['Ошибка инфо прошивки','Firmware-info error'],
+  3:['Версия совпадает','Same version'],4:['TWS не подключён','TWS not connected'],5:['Не в кейсе','Not in charge-store'],
+  6:['Обновление уже идёт','Update already in progress'],7:['Несколько BT-соединений','Multiple BT links']};
+const E6_RESULT={0x00:['Успех, готов к перезагрузке','Success, ready to reboot'],0x01:['Ошибка проверки данных','Verify failed'],0x02:['Общий сбой обновления','Update failed'],
+  0x03:['Не совпал ключ шифрования (chipkey)','Encryption key mismatch (chipkey)'],0x04:['Ошибка файла обновления','Bad update file'],
+  0x05:['Не совпал uboot','uboot mismatch'],0x06:['Ошибка длины','Length error'],0x07:['Ошибка чтения/записи flash','Flash read/write failed'],
+  0x08:['Таймаут команды','Command timeout'],0x09:['Тот же файл','Same file'],0x80:['Loader загружен — нужен relink (pass 2)','Loader staged — relink required (pass 2)']};
+const e2txt=c=>(E2_FLAG[c]||['Неизвестный код','Unknown code'])[S.set.lang==='en'?1:0];
+const e6txt=c=>(E6_RESULT[c]||['Неизвестный код','Unknown code'])[S.set.lang==='en'?1:0];
+
+/* Класс безопасности для сканера и Raw Probe.
+   read  — read-only, минимальный payload безопасен;
+   write — меняет состояние/файлы устройства: сканер НЕ отправляет;
+   danger— необратимые/деструктивные: заблокированы в UI до явного разрешения;
+   ota   — машина обновления: E1/E2/E6 read-only, остальные под интерлоком. */
+const OP_CLASS={
+  0x01:'read',0x02:'read',0x03:'read',0x07:'read',0x0C:'read',0x0D:'read',0x28:'read',0x24:'read',0xD4:'read',0xD6:'read',0xD1:'read',
+  0x06:'write',0x08:'write',0x09:'write',0x0A:'write',0x0B:'write',0x0E:'write',0x12:'write',0x13:'write',0x14:'write',0x15:'write',0x19:'write',
+  0x1A:'write',0x1B:'write',0x1C:'write',0x1D:'write',0x1E:'write',0x20:'write',0x21:'write',0x25:'write',0x26:'write',0x27:'write',
+  0xA0:'read',0xA1:'write',0xA2:'write',0xA3:'read',0xA4:'write',0xA5:'write',0xA6:'write',0xD3:'read',0xD5:'write',0xFF:'read',
+  0x1F:'danger',0x22:'danger',0x23:'danger',
+  0xE1:'read',0xE2:'read',0xE6:'read',0xE3:'ota',0xE4:'ota',0xE5:'ota',0xE7:'ota',0xE8:'ota'};
+const opClass=c=>OP_CLASS[c&255]||'unknown';
+// Сканер (Фаза 1.3) отправляет только read/unknown с минимальным payload; всё остальное пропускается с причиной.
+const SCAN_ALLOW=new Set([0x02,0x03,0x07,0xE1,0xE2,0xE6]);
+const scanAllowed=c=>SCAN_ALLOW.has(c&255);
+// Интерлок OTA: эти опкоды не уходят без armOta() (валидный образ + подтверждённый chipkey + фраза)
+const OTA_LOCKED=[0xE3,0xE4,0xE5,0xE7,0xE8];
+// 9E-namespace: команды часового протокола, которые мы умеем собирать безопасно
+const QIX_OPS={0x02:{n:'set_time',cls:'write'},0x16:{n:'display_ctrl',cls:'write'},0x20:{n:'light/0x20',cls:'write'},0x21:{n:'sync_state',cls:'read'},
+  0x22:{n:'steps (SDK stub)',cls:'read'},0x23:{n:'sleep (SDK stub)',cls:'read'},0x24:{n:'hr (SDK stub)',cls:'read'},0x25:{n:'pressure (stub)',cls:'read'},
+  0x26:{n:'oxygen (stub)',cls:'read'},0x27:{n:'battery',cls:'read'},0x29:{n:'init/heartbeat',cls:'write'},0xC6:{n:'get_screen_info',cls:'read'},
+  0xC7:{n:'screen_info (ответ)',cls:'read'},0xDC:{n:'ready',cls:'read'},0xFF:{n:'customer/ack',cls:'read'},
+  0xA0:{n:'Qix SET_TEST_MODE (BR35 only)',cls:'danger'},0xAA:{n:'Qix TEST_GET_FLASH (BR35 only)',cls:'danger'},0xA6:{n:'Qix TEST_CLOSE (BR35 only)',cls:'danger'}};
+// Health-заглушки: peripherals_support=0 → физических датчиков нет (ТЗ §5.1)
+const HEALTH_STUB=new Set([0x22,0x23,0x24,0x25,0x26]);
+const SMALL_FILE_TYPES=[{type:1,name:'contacts'},{type:2,name:'sports_record'},{type:3,name:'heart_rate'},{type:4,name:'blood_oxygen'},
+  {type:5,name:'sleep'},{type:6,name:'message_sync'},{type:7,name:'weather'},{type:8,name:'call_log'},{type:9,name:'step'}];
+
 /* ---- src/core/core.js ---- */
 const crc16=(b,c=0)=>{for(let i=0;i<b.length;i++){c^=b[i]<<8;for(let j=0;j<8;j++)c=(c&0x8000?(c<<1)^0x1021:c<<1)&0xFFFF}return c};
 const hex=(u,sep=' ')=>Array.from(u||[],x=>x.toString(16).padStart(2,'0')).join(sep).toUpperCase();
@@ -458,7 +552,8 @@ const eq=(a,b)=>!!a&&!!b&&a.length===b.length&&a.every((x,i)=>x===b[i]);
 const PROFILES={
   'e87-ac707n':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE'],chars:['fd01','fd02','fd03']},family:'AC707N/BR35',ota:true,chipkey:0x9847,
     flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},ubootSha256Allowlist:[],knownGoodImages:[],expectedForm:null,verifySpan:[0,0xFC000]},
-  'e87-ac697x':{match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC697x/BR30',ota:false},
+  'e87-ac697x':{match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},chip:'AC697N',family:'AC697x/BR30',sdk:'jl_sdk_ac697_publish',authProfile:'B',
+    transport:{rcsp:'AE00',sideband:'FD01-FD05',qixFd00:false},unsupported:['0xA0','0xAA','0xA6','qix-ota','ble-raw-dump'],fileTransfer:'0x00000007',peripherals:0,ota:false},
   'e87-ac701n':{match:{sdkRegex:'jl_sdk_ac701',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC701N/BR28',ota:false}};
 const familyOf=s=>/ac707/.test(s||'')?'AC707N/BR35':/ac697/.test(s||'')?'AC697x/BR30':/ac701/.test(s||'')?'AC701N/BR28':'unknown';
 function matchProfile(P,profiles){
@@ -512,7 +607,7 @@ const RULE_TXT={
   'R-BATT':['Батарея ≥ 30% или зарядка','Battery ≥ 30% or charging'],
   'R-TEST':['TEST_MODE не активен, dump в сессии не было','TEST_MODE inactive, no dump this session'],
   'R-CONN':['Одно соединение, GATT жив, BT телефона выключен','Single link, GATT alive, phone BT off'],
-  'R-DUMP':['Дамп — только свой (паспорт сертификата = устройство) и только через RCSP. Чужой дамп клонирует MAC и имя.','Own dump only (certificate passport = device), RCSP path only. A foreign dump clones MAC and name.'],
+  'R-DUMP':['Дамп — только свой (паспорт сертификата = устройство), полученный проводом.','Dump must belong to this device and be acquired over a wired UBOOT connection.'],
   'R-VER':['Без даунгрейда в одной линейке версий','No downgrade within a version line'],
   'R-HASH':['SHA-256 в known-good allowlist','SHA-256 in known-good allowlist'],
   'R-PROBE':['Не было probe без power-cycle','No probe without power-cycle'],
@@ -538,7 +633,7 @@ function evaluate(P,R,c){
   add('R-TEST',!c.flags.testMode&&!c.flags.dump&&!P.testModeSuspected?'pass':'block',`test=${c.flags.testMode||P.testModeSuspected} dump=${c.flags.dump}`);
   add('R-CONN',c.connected&&c.phoneBtOff?'pass':'block',`gatt=${c.connected} phoneBtOff=${c.phoneBtOff}`);
   const dump=R.kind==='full-dump'||R.containsKeyMac,dc=c.dumpCert,dp=dc&&dc.passport,own=dump&&dp&&dp.deviceId===P.deviceId;
-  add('R-DUMP',!dump?'pass':own&&!qix?'warn':'block',dump?`cert.passport=${dp?dp.deviceId:'—'} device=${P.deviceId} path=${c.path}`:'no dump');
+  add('R-DUMP',!dump?'pass':own&&dc&&dc.method==='wired-uboot'&&!qix?'warn':'block',dump?`cert.passport=${dp?dp.deviceId:'—'} method=${dc&&dc.method||'—'} path=${c.path}`:'no dump');
   add('R-DUMP-INTEG',!dump||dc&&dc.verified===true&&dc.sigOk===true&&dc.dumpSha256===R.sha256?'pass':'block',dump?(dc?`verified=${dc.verified} sig=${dc.sigOk} sha=${dc.dumpSha256===R.sha256}`:'no certificate'):'no dump');
   const v=vcmp(R.version,P.fwVersion);
   add('R-VER',v==null||v<0?'warn':'pass',`${P.fwVersion||'—'} → ${R.version||'—'}`);
@@ -573,6 +668,13 @@ function selfTest(){
   ok('target_info TLV: name / MAC / vid_pid / fw',tlv.name==='test'&&tlv.edr_addr==='12:34:56:78:9a:bc'&&tlv.vid_pid==='vid=0x5B9 pid=0xABCD'&&tlv.fw_version==='1.16.2.28');
   const real=parseRcspResp(fromHex('FE DC BA 00 03 00 7D 00 01 02 00 20 05 01 00 00 00 00 09 02 46 88 00 02 09 DC 0E 00 07 04 00 00 00 04 00 00 03 05 00 01 02 06 0D 03 07 31 30 05 08 00 01 01 00 04 09 00 00 00 05 0A 00 02 00 8B 11 0B 68 45 39 79 66 73 65 58 36 55 64 4B 37 72 46 68 15 0C 6A 6C 5F 73 64 6B 5F 61 63 36 39 37 5F 70 75 62 6C 69 73 68 05 0D 01 10 02 1C 08 11 00 46 88 00 02 09 DC 02 12 00 03 13 04 04 05 15 00 00 00 07 EF')),rt=real&&decodeTargetInfo(parseTlv(real.data));
   ok('target_info from real E87: ac697 / 1.16.2.28 / MAC / auth_key hidden',!!rt&&real.status===0&&rt.project_code==='jl_sdk_ac697_publish'&&rt.fw_version==='1.16.2.28'&&rt.edr_addr.startsWith('46:88:00:02:09:dc')&&rt.ble_addr==='type 0 46:88:00:02:09:dc'&&!/hE9y/.test(JSON.stringify(rt))&&rt.protocol_version==='32'&&rt.uboot_version==='10');
+  const fi=decodeFunctionInfo(Uint8Array.of(0,0,0,0x4E)),dp=decodeDoublePartition(Uint8Array.of(0,1));
+  ok('bitfields: function_info 0x4E = MUSIC/RTC/LINEIN/FMTX; no filebrowse bit',fi.names.join(',')==='MUSIC,RTC,LINEIN,FMTX');
+  ok('bitfields: attr 8 [00 01] means single-bank + loader',dp.known&&!dp.dualBank&&dp.loaderDownload&&dp.passes===2);
+  const common=decodeSysInfo2([{type:5,data:Uint8Array.of(0x41,0x4C,0x4C)}]);
+  ok('sys_info attr 5 uses COMMON_INFO_ATTR_FILE_BROWSE_TYPE',common.attrs[0].name==='COMMON_INFO_ATTR_FILE_BROWSE_TYPE'&&common.attrs[0].dataHex==='414C4C');
+  const generic=classifyFrame('fd03',fromHex('9E 00 00 FF 02 00 AA 00'));
+  ok('response classification: generic ACK is not command success',generic.kind==='generic-ack'&&!isRealResponse(generic));
   if(typeof functionE1test==='function'){const K=fromHex('06775F87918DD423005DF1D8CF0C142B'),M=fromHex('112233332211'),E=i=>hex(functionE1test([...M],[...fromHex(i)],[...K]),'');
     ok('jl-auth: ТЗ-вектор + 3 KAT (2 с железа E87)',[['70B75992E05EA78FEC533BA12979B590','FFE9E6C80CE1F40F5CCEAE20831C5879'],['b6e080ecaff322916d88fad5aa34c2ac','1d8897ac4604d332e8175e81bb292524'],
       ['a53057d376fc0476e5dc68273b5e791e','b3242d82e1df6c545895ecae13b44fea'],['384ac9d8e481e5caaeb8cead20ee8f9e','fe1b5b643a790fdcf585e354dd377b0f']].every(([i,o])=>E(i)===o.toUpperCase()))}
@@ -587,12 +689,152 @@ function selfTest(){
   f=fixture();f.P.battery={level:10,charging:true};ok('R-BATT: <30% + charging → pass',evaluate(f.P,f.R,f.c).overall==='ALLOW');
   for(const[id,mut]of Object.entries(NEG)){f=fixture();mut(f);const v=evaluate(f.P,f.R,f.c);ok(`${id} → ${v.overall}`,v.rules.find(r=>r.id===id).severity!=='pass'&&v.overall!=='ALLOW')}
   f=fixture();Object.assign(f.R,{kind:'full-dump',containsKeyMac:true,qixWrapped:false});f.c.path='rcsp';const cert={passport:{deviceId:'dev'},verified:true,sigOk:true,dumpSha256:'h'};
-  f.c.dumpCert=cert;ok('R-DUMP: own verified dump + RCSP → WARN',sevOf(f,'R-DUMP')==='warn'&&sevOf(f,'R-DUMP-INTEG')==='pass');
+  f.c.dumpCert={...cert,method:'wired-uboot'};ok('R-DUMP: own wired verified dump + RCSP → WARN',sevOf(f,'R-DUMP')==='warn'&&sevOf(f,'R-DUMP-INTEG')==='pass');
   f.c.dumpCert={...cert,verified:false};ok('R-DUMP-INTEG: unverified certificate → BLOCK',sevOf(f,'R-DUMP-INTEG')==='block');
   f.c.dumpCert={...cert,sigOk:false};ok('R-DUMP-INTEG: bad signature → BLOCK',sevOf(f,'R-DUMP-INTEG')==='block');
   f.c.dumpCert={...cert,dumpSha256:'other'};ok('R-DUMP-INTEG: certificate of another file → BLOCK',sevOf(f,'R-DUMP-INTEG')==='block');
   f.c.dumpCert={...cert,passport:{deviceId:'other'}};ok('R-DUMP: foreign dump → BLOCK',evaluate(f.P,f.R,f.c).overall==='BLOCK');
   return out}
+
+/* ---- src/core/bitfields.js ---- */
+/* ===== core/bitfields — декод битовых полей по вендорским определениям =====
+ * Источник: data/bitfields.md (JL_rcsp_protocol.h + rcsp_bluetooth.c, fw-AC63_BT_SDK).
+ * Правило: сырые байты сохраняются всегда; эвристики помечаются speculative:true.
+ * Два РАЗНЫХ пространства атрибутов: 0x03 → ATTR_TYPE_*, 0x07 → COMMON_INFO_ATTR_*.
+ */
+const be16=(u,i=0)=>(u[i]<<8)|u[i+1], be32=(u,i=0)=>((u[i]<<24)|(u[i+1]<<16)|(u[i+2]<<8)|u[i+3])>>>0;
+const le16=(u,i=0)=>u[i]|(u[i+1]<<8);
+const u8a=(...a)=>Uint8Array.from(a.flat?a.flat():a);
+const bytesOf=v=>v instanceof Uint8Array?v:Uint8Array.from(v);
+const printable=u=>u.length>0&&u.every(b=>b>=32&&b<127);
+const asciiOf=u=>String.fromCharCode(...u);
+const maskOf=bits=>bits.reduce((m,b)=>m|(1<<b),0)>>>0;
+const bitsOf=n=>{const o=[];for(let i=0;i<32;i++)if((n>>>i)&1)o.push(i);return o};
+
+// FUNCTION_INFO (attr 4): в вендорском коде это НОМЕРА битов, не маски. Дефолт 0x4E.
+const FUNC_BITS={1:'MUSIC',2:'RTC',3:'LINEIN',6:'FMTX'};
+function decodeFunctionInfo(u){
+  if(!u||u.length<4)return{raw:hex(u,''),bits:[],names:[],note:'ожидается 4 Б BE'};
+  const v=be32(u),bits=bitsOf(v);
+  return{raw:hex(u,''),value:v,hexValue:'0x'+v.toString(16).toUpperCase(),bits,
+    names:bits.map(b=>FUNC_BITS[b]||('bit'+b)),
+    note:'аудио-функции BT-плеера; бита filebrowse здесь НЕТ (data/bitfields.md §3)'}}
+
+// DOUBLE_PARITION (attr 8) — что реально решает судьбу OTA (bitfields.md §4)
+function decodeDoublePartition(u){
+  if(!u||u.length<2)return{raw:hex(u,''),known:false};
+  const dual=u[0]===1,loader=u[1]===1;
+  return{raw:hex(u,''),known:true,dualBank:dual,loaderDownload:loader,
+    mode:dual?'dual-bank (фоновый OTA)':loader?'single-bank + loader (двухэтапный OTA)':'single-bank',
+    passes:dual?1:2}}
+
+// Feature map 0x02 / file_transfer: биты установлены, семантика в открытом SDK отсутствует.
+function decodeFeatureMap(mask){const bits=bitsOf(mask>>>0);
+  return{mask:mask>>>0,hex:'0x'+(mask>>>0).toString(16).toUpperCase().padStart(8,'0'),bits,
+    speculative:true,note:'семантика битов не подтверждена вендорским кодом — проверять эмпирически (Raw Probe)'}}
+
+// ⚠ SPECULATIVE: attr 18 в вендорском SDK не определён (bitfields.md §7)
+const PERIPH_BITS={0:'HR',1:'SpO2',2:'accelerometer',3:'pedometer',4:'temperature',5:'GPS',6:'barometer',7:'gyroscope'};
+function decodePeripherals(u){const v=u&&u.length?u[0]:0;
+  return{raw:hex(u,''),value:v,bits:bitsOf(v),names:bitsOf(v).map(b=>PERIPH_BITS[b]||('bit'+b)),speculative:true,
+    note:v===0?'датчиков нет физически — health-значения это заглушки watch-SDK':'таблица битов спекулятивна'}}
+
+const macStr=u=>hex(u.subarray(0,6),':').toLowerCase();
+// Ответ 0x03: TLV в пространстве ATTR_TYPE_*
+function decodeTargetInfo2(attrs){
+  const out={attrs:[],fields:{}};
+  for(const{type,data}of attrs){
+    const name=ATTR_TI[type]||('ATTR_'+type),a={type,typeHex:hx(type),name,dataHex:hex(data,''),len:data.length};
+    switch(type){
+      case 0:a.decoded=data[0];out.fields.protocolVersion=data[0];break;
+      case 2:a.decoded=macStr(data)+(data.length>6?' +'+hex(data.subarray(6),''):'');out.fields.edrAddr=macStr(data);break;
+      case 3:a.decoded=data[0];out.fields.platform=data[0];break;
+      case 4:{const f=decodeFunctionInfo(data);a.decoded=f.hexValue+' ['+f.names.join(', ')+']';a.detail=f;out.fields.functionInfo=f;break}
+      case 5:a.decoded=printable(data)?asciiOf(data):hex(data,'');out.fields.devVersion=a.decoded;break;
+      case 6:a.decoded=data[0]+(data[0]===0?' (AI SDK)':data[0]===1?' (BT_MATE)':'');out.fields.sdkType=data[0];break;
+      case 7:a.decoded=printable(data)?asciiOf(data):hex(data,'');out.fields.ubootVersion=a.decoded;break;
+      case 8:{const d=decodeDoublePartition(data);a.decoded=`${d.mode}`;a.detail=d;out.fields.doublePartition=d;break}
+      case 9:a.decoded=data[0];a.detail={mandatoryUpgrade:data[0]===1,loader:data[0]===1};out.fields.mandatoryUpgrade=data[0]===1;break;
+      case 10:if(data.length>=4){a.decoded=`vid=${hx(be16(data))} pid=${hx(be16(data,2))}`;out.fields.vid=be16(data);out.fields.pid=be16(data,2)}else a.decoded=hex(data,'');break;
+      case 11:a.decoded=`${data.length} B (скрыт)`;a.redacted=true;break; // ключ устройства не пишем в паспорт
+      case 12:a.decoded=printable(data)?asciiOf(data):hex(data,'');out.fields.projectCode=a.decoded;break;
+      case 13:a.decoded=data.length>=4?Array.from(data.subarray(0,4)).join('.'):hex(data,'');out.fields.maxMtu=data.length>=2?be16(data):null;break;
+      case 17:a.decoded=data.length===7?`type ${data[0]} ${macStr(data.subarray(1))}`:hex(data,'');out.fields.bleAddr=data.length===7?macStr(data.subarray(1)):null;break;
+      case 18:{const p=decodePeripherals(data);a.decoded=p.value+' ['+p.names.join(', ')+']';a.detail=p;out.fields.peripherals=p;break}
+      case 19:a.decoded=hex(data,'');a.detail={speculative:true,note:'dev_support_func отсутствует в fw-AC63_BT_SDK (часовой SDK)'};break;
+      case 21:{const m=data.length>=4?be32(data):data[0];const f=decodeFeatureMap(m);a.decoded=f.hex+' bits['+f.bits.join(',')+']';a.detail=f;out.fields.fileTransfer=f;break}
+      default:a.decoded=data.length===1?String(data[0]):printable(data)?asciiOf(data):hex(data,'');a.heuristic=true}
+    out.attrs.push(a)}
+  return out}
+
+// Ответ 0x07: TLV в пространстве COMMON_INFO_ATTR_* (function:1 перед TLV)
+function decodeSysInfo2(attrs){
+  const out={attrs:[],fields:{}};
+  for(const{type,data}of attrs){
+    const name=ATTR_CI[type]||('COMMON_ATTR_'+type),a={type,typeHex:hx(type),name,dataHex:hex(data,''),len:data.length};
+    switch(type){
+      case 0:a.decoded=data[0]+'%';out.fields.battery=data[0];break;
+      case 1:a.decoded=data[0];out.fields.volume=data[0];break;
+      case 2:{a.decoded=hex(data,'');const st=[]; // DevStorageState: idx:1 handle:4 BE online:1 — эвристика (ebadge-python-cli)
+        if(data.length>=6&&data.length%6===0)for(let i=0;i<data.length;i+=6)st.push({index:data[i],handle:hex(data.subarray(i+1,i+5),''),handleValue:be32(data,i+1),online:data[i+5]!==0});
+        a.detail={speculative:true,storage:st,note:'COMMON_INFO_ATTR_DEV: раскладка записей не подтверждена вендорским кодом'};out.fields.storage=st;break}
+      case 5:a.decoded=printable(data)?'"'+asciiOf(data)+'"':hex(data,'');out.fields.fileBrowseType=a.decoded;
+        a.detail={note:'COMMON_INFO_ATTR_FILE_BROWSE_TYPE — какие типы файлов девайс готов браузить'};break;
+      case 6:a.decoded=data[0];out.fields.funType=data[0];break;
+      case 7:a.decoded=data[0];out.fields.brightness=data[0];break;
+      default:a.decoded=data.length===1?String(data[0]):printable(data)?asciiOf(data):hex(data,'');a.heuristic=true}
+    out.attrs.push(a)}
+  return out}
+
+// Запись файлового браузера: header:1 | cluster:4 BE | file_num:2 BE | name_len:1 | name:N
+function decodeBrowseEntries(data,queryType=0){
+  const out=[];let i=0;
+  while(i+8<=data.length){
+    const h=data[i],isFile=(h&1)!==0,unicode=(h&2)===0,devIndex=(h>>2)&0x1F;
+    const cluster=be32(data,i+1),fileNum=be16(data,i+5),n=data[i+7];i+=8;
+    if(i+n>data.length)break;
+    const nb=data.subarray(i,i+n);i+=n;
+    let name;
+    if(unicode&&n>=2&&n%2===0){let s='';for(let k=0;k<n;k+=2)s+=String.fromCharCode(nb[k]|(nb[k+1]<<8));name=s.replace(/\0+$/,'')}
+    else name=asciiOf(nb).replace(/\0+$/,'');
+    out.push({name,isFile,type:queryType,typeName:isFile?'file':'folder',id:fileNum,cluster,devIndex,dev:DEV_HANDLERS[devIndex]||('dev'+devIndex),size:0})}
+  return{entries:out,consumed:i,trailing:data.length-i}}
+
+// SIMPLE_FILE_TRANS 0x28 op=0: [version?] + N*(id:2 BE, size:2 BE); встречаются 3 варианта начала
+function parseSmallFileList(type,typeName,body){
+  for(const start of[1,2,0]){const rest=body.length-start;if(rest<=0||rest%4)continue;
+    const out=[];for(let i=start;i+3<body.length;i+=4){const id=be16(body,i),size=be16(body,i+2);if(!id&&!size)continue;out.push({type,typeName,id,size})}
+    if(out.length||rest===0)return out}
+  return[]}
+// SIMPLE_FILE_TRANS 0x28 op=1: две формы ответа — A [ret][crcH][crcL][data], B [op][ret][crcH][crcL][data]
+function parseSmallFileRead(body){
+  if(body.length<3)return{ok:false,error:'короткий ответ ('+body.length+' Б)',data:new Uint8Array(0)};
+  let ret,crc,start,variant;
+  if(body[0]===0){ret=body[0];crc=be16(body,1);start=3;variant='A'}
+  else if(body.length>=4&&body[1]===0){ret=body[1];crc=be16(body,2);start=4;variant='B'}
+  else{ret=body[0];crc=0;start=3;variant='A(err)'}
+  const data=body.subarray(Math.min(start,body.length));
+  return{ok:ret===0,ret,crc16:crc,variant,data,statusName:statusName(ret)}}
+
+// Flash ID из UBOOT: последний байт density = log2(размер)
+function decodeFlashId(u){
+  if(!u||u.length<3)return null;
+  const density=u[u.length-1],size=density>=8&&density<=32?2**density:null;
+  return{id:hex(u,''),manufacturer:hx(u[0]),density,densityHex:hx(density),size,
+    sizeText:size?(size>=1<<20?(size/(1<<20))+' MiB':(size>>10)+' KiB'):'неизвестно',
+    note:'size = 2^density (последний байт ID); сверить с дампом'}}
+
+// Рекламный маркер JLOTA после OTA: D6 05 "JLOTA" + MAC反转 в байтах +8..+14
+const JLOTA_MARKER=[0xD6,0x05,0x41,0x54,0x4F,0x4C,0x4A];
+function parseJlOtaAdv(u){
+  if(!u||u.length<14)return null;
+  let at=-1;for(let i=0;i+7<=u.length;i++)if(JLOTA_MARKER.every((b,k)=>u[i+k]===b)){at=i;break}
+  if(at<0)return null;
+  const m=u.subarray(at+8,at+14);
+  return{marker:'JLOTA',offset:at,mac:hex(Array.from(m).reverse(),':').toLowerCase(),raw:hex(u,'')}}
+
+// Батарея 9E 0x27: [mode, percent]; mode≠0 ≈ зарядка (не подтверждено → в R-BATT не используется)
+const decodeBatteryPush=p=>p&&p.length>=2?{mode:p[0],level:p[1],charging:p[0]===1?null:null}:null;
 
 /* ---- src/protocol/hash.js ---- */
 /* ===== protocol/hash: CAPS 0xD7 + HASH_RANGE 0xD5 (Дополнение №1 §6) ===== */
@@ -717,7 +959,7 @@ const UFW={parse:null};
 const QIX={ready:false,begin:null,sendWindow:null,resume:null,apply:null,probe:null,abort:null};
 const RCSP_READY=false; // v1.1: vanilla RCSP restore
 
-/* READBACK — ПОРТИРОВАНО в src/protocol/testmode.js (qix-ble cmd_dump): dumpRange(ctx, addr, len, onProgress) → Uint8Array, on-flash форма, ставит TEST_MODE */
+/* READBACK — выключен: для подтверждённого AC697x/BR30 нет доказанного BLE flash-read ответа. Полный дамп — проводной UBOOT. */
 const READBACK={ready:false,dumpRange:null};
 /* PORT: jl-flash-decrypt + JL CRC (jieli-ble-badge-research)
    JL.decrypt(code) => Uint8Array (descrambled CODE) · JL.parseHeader(code) => bool
@@ -759,6 +1001,14 @@ const T={conn:['Подключить','Connect'],disc:['Отключить','Dis
   e_ota1:['REQ_UPDATE отвергнут — вероятно TEST_MODE. Выключите/включите бейдж и нажмите «Я сделал(а) power-cycle».','REQ_UPDATE rejected — likely TEST_MODE. Power-cycle the badge and press “I power-cycled”.'],
   e_bond:['Обрыв на первой записи — вероятно устаревшее сопряжение. Удалите бейдж из сопряжённых в ОС и подключитесь заново.','Link dropped on first write — likely a stale bond. Remove the badge from OS pairings and reconnect.'],
   e_ota4:['Бейдж не вернулся после apply. НЕ прошивайте повторно вслепую. Восстановление — только USB-ISP вне приложения. Прошивка заблокирована до перезагрузки страницы.','Badge did not return after apply. Do NOT retry blindly. Recovery is USB-ISP only. Flashing locked until page reload.'],
+  deviceTools:['Диагностика и функции устройства','Device diagnostics and tools'],probeTransport:['Транспорт','Transport'],probeFrame:['Полный hex-кадр','Full hex frame'],
+  probeTimeout:['Окно ответа, мс','Response window, ms'],sendProbe:['Отправить read-only probe','Send read-only probe'],
+  probeSafety:['Только подключённое устройство. Raw Probe ограничен известными read-only командами; общий скан опкодов и команды записи не отправляются. ACK 9E 0xFF сам по себе не подтверждает исполнение.','Connected device only. Raw Probe is limited to known read-only commands; opcode sweeps and write commands are not sent. A 9E 0xFF ACK alone does not confirm execution.'],
+  browseFiles:['Обойти файловые устройства','Browse file devices'],smallFiles:['Список малых файлов','List small files'],
+  fetchResources:['Скачать найденное','Fetch listed resources'],exportResources:['Экспорт ZIP','Export ZIP'],
+  otaProbe:['Read-only OTA probe','Read-only OTA probe'],readScreen:['Прочитать экран','Read screen'],
+  readHealth:['Проверить health (заглушка)','Read health (stub)'],syncTime:['Синхронизировать время','Sync time'],
+  contentImage:['Изображение для отправки','Image to send'],sendImage:['Отправить изображение','Send image'],
   ok_done:['Прошивка завершена и подтверждена','Flash complete and verified'],meta:['Паспорт собран','Passport captured'],imgOk:['Образ разобран','Image parsed']};
 const t=k=>(T[k]||[k])[S.set.lang==='en'?1:0];
 
@@ -767,7 +1017,7 @@ const t=k=>(T[k]||[k])[S.set.lang==='en'?1:0];
 Object.assign(T,{ok_done:['Прошивка завершена','Flash complete'],integrity:['Целостность','Integrity'],
   dumpCert:['Сертификат дампа (dump.cert.json) для restore:','Dump certificate (dump.cert.json) for restore:'],certWired:['Сертифицировать загруженный дамп (провод)','Certify loaded dump (wired)'],
   rbL1:['Verify readback (L1)','Verify readback (L1)'],rhL2:['Re-hash (L2)','Re-hash (L2)'],acceptPartial:['Принять partial','Accept partial'],copyDig:['Копировать digest','Copy digests'],
-  takeDump:['Снять дамп (BLE, TEST_MODE)','Dump flash (BLE, TEST_MODE)'],spot:['Spot-check дампа','Spot-check dump'],certView:['Сертификат дампа','Dump certificate'],
+  takeDump:['BLE raw dump (недоступно)','BLE raw dump (unavailable)'],spot:['Spot-check дампа','Spot-check dump'],certView:['Сертификат дампа','Dump certificate'],
   s_rbOffer:['Предлагать readback (L1)','Offer readback (L1)'],s_spotN:['Spot-check, блоков по 4 КБ','Spot-check, 4 KB blocks'],s_span:['VERIFY_SPAN (0xA:0xB)','VERIFY_SPAN (0xA:0xB)'],s_hashTo:['Таймаут HASH_RANGE, мс','HASH_RANGE timeout, ms'],
   rbConfirm:['Readback (L1) переведёт бейдж в TEST_MODE: перед следующей OTA обязателен power-cycle. Выполнить?','Readback (L1) puts the badge into TEST_MODE: power-cycle before the next OTA. Run it?'],
   dumpConfirm:['Дамп по BLE включает TEST_MODE и занимает минуты. Дамп никогда не прошивается автоматически. Продолжить?','A BLE dump enables TEST_MODE and takes minutes. Dumps are never flashed automatically. Continue?'],
@@ -779,21 +1029,22 @@ Object.assign(T,{ok_done:['Прошивка завершена','Flash complete'
   imgChanged:['Загружен другой образ — сверка невозможна','A different image is loaded — cannot verify'],
   i_chunk:['CRC16 чанков (аки окон)','Chunk CRC16 (window acks)'],i_whole:['CRC16 файла (completion 0x20/0x1C)','Whole-file CRC16 (completion 0x20/0x1C)'],
   i_jl:['Внутренние CRC JL-образа','Internal JL image CRCs'],i_boot:['Boot-маркер / имя / версия','Boot marker / name / version'],i_rb:['Readback / HASH_RANGE','Readback / HASH_RANGE'],
-  s_dumpSize:['Дамп: объём','Dump: size'],e_mirror:['Дамп повторяется — флеш, вероятно, меньше выбранного объёма:','Dump repeats — flash is likely smaller than selected size:'],
-  s_dumpChunk:['Дамп: байт на запрос 0xAA','Dump: bytes per 0xAA request'],h_dump:['Дамп недоступен','Dump unavailable'],
+  e_mirror:['Дамп повторяется — флеш, вероятно, меньше выбранного объёма:','Dump repeats — flash is likely smaller than selected size:'],
+  h_dumpUnsupported:['Стоковая прошивка AC697x не экспортирует чтение флеша. Доступны: файловый браузер (ресурсы) и проводной UBOOT-дамп (полный).','Stock AC697x firmware does not export flash reads. Available: file browser (resources) and wired UBOOT dump (full).'],
   h_conn:['нет подключения','not connected'],h_auth:['auth не пройден','auth not passed'],h_boot:['bootstrap не выполнен — переподключитесь','bootstrap not done — reconnect'],
-  h_busy:['идёт операция','operation in progress'],h_port:['адаптер readback не портирован','readback adapter not ported'],
+  h_busy:['идёт операция','operation in progress'],h_port:['BLE readback не подтверждён для этого устройства','BLE readback is not validated for this device'],
   s_preAuth:['Expert: 0x03/0x07 без auth (только чтение)','Expert: 0x03/0x07 without auth (read-only)'],
   e_reconn:['Переподключение не удалось: бейдж держит один слот или уснул. Выключите и включите питание, отключите BT телефона, при необходимости удалите сопряжение в ОС, затем «Подключить».','Reconnect failed: the badge holds a single slot or fell asleep. Power-cycle it, turn off phone BT, remove the OS pairing if needed, then Connect.']});
 
 /* ---- src/state/store.js ---- */
 /* ===== state ===== */
-const DEF={connectTo:15000,reqTo:3000,winTo:5000,chunk:490,win:8,retries:3,expert:false,chime:false,theme:'dark',lang:'ru',readbackOffer:true,spotN:16,verifySpan:'0x0:0xFC000',hashTo:30000,rcspPreAuth:false,dumpChunk:256,dumpSize:'4194304'};
+const DEF={connectTo:15000,reqTo:3000,winTo:5000,chunk:490,win:8,retries:3,expert:false,chime:false,theme:'dark',lang:'ru',readbackOffer:true,spotN:16,verifySpan:'0x0:0xFC000',hashTo:30000,rcspPreAuth:false,probeTo:3000,scanTo:1500,browseTo:5000,otaLoopTo:10000};
 const LS=(k,d)=>{try{return JSON.parse(localStorage.getItem('bg.'+k))??d}catch{return d}};
 const SV=(k,v)=>{try{localStorage.setItem('bg.'+k,JSON.stringify(v))}catch{}};
 const S={set:{...DEF,...LS('set',{})},allow:LS('allow',{uboot:[],image:[]}),flags:LS('flags',{testMode:false,dump:false,probe:false}),profiles:LS('profiles.v3',null)||structuredClone(PROFILES),
   dev:null,chars:{},gatt:null,gattReady:false,conn:'off',P:null,R:null,buf:null,dumpPass:null,V:null,path:'qix',phase:'idle',log:[],waiters:[],ac:null,wake:null,
-  prog:{done:0,total:0,t0:0,start:0,win:0},abort:false,locked:false,userDisc:false,reconnecting:false,report:null,dumpCert:null,dumpBuf:null,img:null,l0:null,int:null,asyncTests:null,chunkCrc:{ok:0,fail:0},boot:false,quiet:false,battAt:0,maxNotify:{}};
+  prog:{done:0,total:0,t0:0,start:0,win:0},abort:false,locked:false,userDisc:false,reconnecting:false,report:null,dumpCert:null,dumpBuf:null,img:null,l0:null,int:null,asyncTests:null,chunkCrc:{ok:0,fail:0},boot:false,quiet:false,battAt:0,maxNotify:{},
+  rawLog:[],scan:[],capMatrix:null,smallFiles:[],res:[],resManifest:null,health:null,otaProbe:null};
 const ACTIVE=['preflight','armed','transferring','paused','resuming','applying','rebooting','verifying-marker','verifying-hash','verifying-readback','dumping'];
 const ABORTABLE=['preflight','armed','transferring','paused','resuming','dumping','verifying-readback'];
 
@@ -837,7 +1088,7 @@ function decode(k,u){if(u[0]===0xFE&&u[1]===0xDC&&u[2]===0xBA){const r=parseRcsp
 
 /* ---- src/ble/transport.js ---- */
 /* ===== BLE transport =====
- * GATT E87 сверен с qix-ble service.py: сервис C2E6FD00 = Qix-sideband (TX FD02, RX FD01/FD03) — характеристики FD00 НЕТ ни у одного E87;
+ * GATT E87 сверен с qix-ble service.py: сервис C2E6FD00 = Qix-sideband (TX FD02, RX FD01/FD03) — характеристика FD00 не обнаружена на E87;
  * AE00 = RCSP (TX AE01, RX AE02). FD05 не подписываем: по qix-ble это ломает REQ_UPDATE (silent reject). 2A19 на этой прошивке пустой. */
 const NAMES=['E87','E92','L8','X9','LED Badge','EC-BADGE'];
 const SVC={ae00:'0000ae00-0000-1000-8000-00805f9b34fb',fd:'c2e6fd00-e966-1000-8000-bef9c223df6a'};
@@ -867,7 +1118,7 @@ function onRx(e){const v=e.target.value,u=new Uint8Array(v.buffer.slice(v.byteOf
   const take=k==='fd01'||k==='fd03'||k==='fd05'?qixTake:k==='ae02'&&(u[0]===0xFE||rxBuf.ae02&&rxBuf.ae02.length)?feTake:null;
   if(!take)return dispatch(k,u);
   let b=cat(rxBuf[k],u);for(;;){const r=take(b);b=r.rest;if(r.skipped)log('EV',k,null,`skipped ${r.skipped} B`);if(!r.frame)break;dispatch(k,r.frame)}rxBuf[k]=b}
-function dispatch(k,u){log('RX',k,u,decode(k,u));sniff(u);onFrame(k,u);
+function dispatch(k,u){log('RX',k,u,decode(k,u));sniff(u);onFrame(k,u);rcspRoute(k,u);
   S.waiters=S.waiters.filter(x=>{if(x.pred(k,u)){x.res({k,u});return false}return true})}
 function onFrame(k,u){if(!S.P)return;
   if(u[0]===0x9E){const f=parse9E(u);if(!f)return;
@@ -875,8 +1126,10 @@ function onFrame(k,u){if(!S.P)return;
     // push после bootstrap: cmd 0x27 [mode, percent] (qix-ble battery.py); mode 1 ≈ зарядка — не подтверждено, в R-BATT не используем
     else if(f.cmd===0x27&&f.len===2){S.P.battery.level=f.payload[1];S.P.battery.mode=f.payload[0];S.battAt=Date.now();render()}}
   else if(isFE(u,0x03)||isFE(u,0x07)){const r=parseRcspResp(u);if(!r||r.status!==0)return;
-    if(r.cmd===0x03){const ti=decodeTargetInfo(parseTlv(r.data));S.P.targetInfo=ti;if(ti.edr_addr)S.P.mac=ti.edr_addr;if(ti.fw_version&&!S.P.fwVersion)S.P.fwVersion=ti.fw_version}
-    else S.P.sysInfo=Object.fromEntries(parseTlv(r.data.subarray(1)).map(a=>['attr_'+a.type,hex(a.data,'')]));render()}}
+    if(r.cmd===0x03){const attrs=parseTlv(r.data),ti=decodeTargetInfo(attrs);S.P.targetInfo=ti;S.P.decoded={...(S.P.decoded||{}),targetInfo:decodeTargetInfo2(attrs)};
+      if(ti.edr_addr)S.P.mac=ti.edr_addr;if(ti.fw_version&&!S.P.fwVersion)S.P.fwVersion=ti.fw_version}
+    else{const attrs=parseTlv(r.data.subarray(1));S.P.sysInfo=Object.fromEntries(attrs.map(a=>['attr_'+a.type,hex(a.data,'')]));
+      S.P.decoded={...(S.P.decoded||{}),sysInfo:decodeSysInfo2(attrs)}}render()}}
 function sniff(u){if(!S.P)return;const s=ascii(u),sdk=s.match(/jl_sdk_ac\w+/),ver=s.match(/\d+\.\d+\.\d+\.\d+\.\d+/);
   if(sdk)S.P.sdkString=sdk[0];if(ver)S.P.fwVersion=ver[0];if(/BADGE-FWMARK/.test(s))S.P.bootMarker=true}
 
@@ -905,9 +1158,8 @@ async function gattUp(){
 async function onDisc(){S.gattReady=false;S.boot=false;S.waiters.forEach(x=>x.rej(new Error('disconnected')));S.waiters=[];
   log('EV','',null,'disconnected');if(S.phase==='transferring'||S.phase==='resuming')S.phase='paused';setConn('off');
   if(S.userDisc||S.reconnecting)return;S.reconnecting=true;const dev=S.dev;
-  try{for(let i=0;i<7;i++){await sleep(Math.min(16000,1000*2**i));if(S.userDisc||S.dev!==dev)return; // новый Connect отменяет старый цикл
-    try{await gattUp();return}catch(e){log('EV','',null,`reconnect ${i+1} ✕ ${e.message}`)}}
-    toast(t('e_reconn'),'block')}finally{S.reconnecting=false}}
+  try{await sleep(2500);if(S.userDisc||S.dev!==dev)return;toast(t('e_reconn'),'block')}
+  finally{S.reconnecting=false}}
 async function waitConn(want,ms){const end=Date.now()+ms;while(Date.now()<end){if(want?S.gattReady&&S.dev.gatt.connected:!S.dev.gatt.connected)return true;await sleep(300)}return false}
 function disconnect(){S.userDisc=true;if(S.dev&&S.dev.gatt.connected)S.dev.gatt.disconnect();S.gattReady=false;S.boot=false;setConn('off')}
 // Батарея: свежий push 0x27 (триггер — 0x29 [80], как в bootstrap phase 5); стандартный 2A19 — последний шанс
@@ -919,50 +1171,97 @@ async function readBatt(){
   try{const d=await gq(()=>c.readValue());if(d.byteLength)return d.getUint8(0);log('EV','2a19',null,'read: 0 bytes')}catch(e){log('EV','2a19',null,'read ✕ '+e.message)}
   return null}
 
-/* ---- src/protocol/testmode.js ---- */
-/* ===== protocol/testmode: BLE-дамп флеша — порт qix-ble cli.py cmd_dump + диагностика =====
- * После auth + bootstrap: Qix 0xA0 [01] SET_TEST_MODE → 0xAA TEST_GET_FLASH <addr LE32><len LE32> → ответ 0xAA с байтами → 0xA6 TEST_CLOSE.
- * ElectronicCats помечают BLE-вектор как «to be validated» и снимают дамп проводом (UBOOT) — поэтому сначала проба:
- * размеры [chunk,128,64,16] (вдруг ответ не влезает в MTU), таймаут 10 с как в qix-ble, ack 0xFF [AA,00] = принято, [AA,≠0] = отказ,
- * и временная подписка на FD05 (канал «тяжёлых» передач; TEST_MODE и так требует power-cycle перед OTA). */
-const le32=n=>[n&255,n>>>8&255,n>>>16&255,n>>>24&255];
-const isAA=(u,n)=>u[3]===0xAA||u[3]===0xFF&&u[6]===0xAA;
-READBACK.ready=true;
-READBACK.dumpRange=async(ctx,addr,len,onProgress)=>{
-  if(!S.P||!S.P.auth.ok||!S.boot)throw new Error('E-DUMP-002 нужны auth + bootstrap');
-  const tmo=Math.max(10000,S.set.reqTo),fd05=S.chars.fd05;let sub5=false;
-  // HIL: на 0xAA бейдж сразу шлёт ack FF [AA 00] на FD03 — это «принято», не данные и не отказ.
-  // Данные (кадр cmd 0xAA) ждём параллельно с ack, чтобы не пропустить их, если оба придут одним уведомлением.
-  const QC=k=>k==='fd01'||k==='fd03'||k==='fd05';
-  const get=async(off,n)=>{
-    const pD=waitFor((k,u)=>QC(k)&&u[0]===0x9E&&u[3]===0xAA,tmo),pA=waitFor((k,u)=>QC(k)&&u[0]===0x9E&&u[3]===0xFF&&u[6]===0xAA,tmo);pD.catch(()=>{});pA.catch(()=>{});
-    await qix(0x00,0xAA,[...le32(addr+off),...le32(n)]);
-    const first=await Promise.any([pD.then(x=>({d:x})),pA.then(x=>({a:x}))]).catch(()=>null);
-    if(!first)throw new Error(`нет ни ack, ни данных за ${tmo/1000} с`);
-    let d=first.d;
-    if(!d){const st=first.a.u[7];if(st)throw new Error(`E-DUMP-003 0xAA отклонён: status ${hx(st)}`);
-      if(!S.quiet)log('EV','',null,`0xAA принят (ack status 00), жду данные до ${tmo/1000} с`);
-      d=await pD.catch(()=>null);if(!d)throw new Error(`ack 00, но кадра данных 0xAA нет за ${tmo/1000} с`)}
-    const p=d.u.slice(6);if(p.length!==n)throw new Error(`short ${p.length}/${n}`);return p};
-  S.flags.testMode=S.flags.dump=true;saveFlags(); // ставим до 0xA0: даже без ответа бейдж может уже быть в TEST_MODE
-  try{
-    if(fd05&&(fd05.properties.notify||fd05.properties.indicate))try{await gq(()=>fd05.startNotifications());fd05.addEventListener('characteristicvaluechanged',onRx,{signal:S.ac.signal});sub5=true}catch{}
-    await qreq(0xA0,[0x01],tmo,{expect:null});await sleep(300);
-    const max=Math.max(16,Math.min(1024,S.set.dumpChunk|0||256));let cs=0,first=null,lastErr='';
-    for(const n of S.dumpCs?[S.dumpCs]:[...new Set([max,128,64,16])].filter(x=>x<=max)){ // рабочий размер кэшируется на соединение (spot-check не пробует заново)if(S.abort)throw new Error('E-ABORT');
-      log('EV','',null,`probe TEST_GET_FLASH ${n} B, timeout ${tmo/1000} s`);
-      try{first=await get(0,Math.min(n,len));cs=n;break}catch(e){lastErr=e.message;log('EV','',null,`probe ${n} B ✕ ${e.message}`);if(e.message.startsWith('E-DUMP-003'))throw e}}
-    if(!cs)throw new Error(`E-DUMP-003 TEST_GET_FLASH: данных нет (16–${max} B, слушали FD01/FD03${sub5?'/FD05':''}; max notify ${JSON.stringify(S.maxNotify)}): ${lastErr}`);
-    S.dumpCs=cs;log('EV','',null,`TEST_GET_FLASH ✓ chunk ${cs} B; dump ${hx(addr)}+${hx(len)}`);
-    const out=new Uint8Array(len);out.set(first);let off=first.length;if(onProgress)onProgress(off);
-    S.quiet=true; // в журнал не пишем тысячи кадров 0xAA; прочие кадры видны
-    for(;off<len;){if(S.abort)throw new Error('E-ABORT');const n=Math.min(cs,len-off);let r;
-      for(let tries=0;;tries++){try{r=await get(off,n);break}
-        catch(e){if(S.abort||!S.gattReady||tries>=S.set.retries||e.message.startsWith('E-DUMP-003'))throw new Error(`E-DUMP-001 @${hx(addr+off)}: ${e.message}`);await sleep(150*2**tries)}}
-      out.set(r,off);off+=n;if(onProgress)onProgress(off);if(off%0x40000===0)log('EV','',null,`dump ${hx(off)}/${hx(len)}`)}
-    return out}
-  finally{S.quiet=false;await qix(0x00,0xA6,[],'TEST_CLOSE').catch(()=>{});
-    if(sub5){fd05.removeEventListener('characteristicvaluechanged',onRx);await gq(()=>fd05.stopNotifications()).catch(()=>{})}}};
+/* ---- src/protocol/rcsp.js ---- */
+/* ===== protocol/rcsp — сессионный слой RCSP (AE00) + классификация ответов =====
+ * Ключевое правило ТЗ §0.2: generic-ack (9E … FF 02 00 <echo> <status>) — это
+ * «принял байты», а НЕ исполнение команды. Успех = fe-response или sideband-data.
+ * Кадры и внутренняя рамка: data/rcsp-opcodes.json → framing.
+ */
+const FE_FLAG={cmd:0xC0,push:0x80,resp:0x00};
+// Внутренняя рамка RCSP: команда [sn][xmOp if cmd==0x01][payload]; ответ [status][sn][xmOp if 0x01][payload]
+function feInner(u){
+  const flag=u[3],cmd=u[4],len=be16(u,5),body=u.subarray(7,7+len);
+  const isCmd=(flag&0x80)!==0,hasResp=(flag&0x40)!==0;
+  let sn=0,xmOp=null,status=null,off=0;
+  if(isCmd){sn=body[0]??0;off=1;if(cmd===0x01&&body.length>=2){xmOp=body[1];off=2}}
+  else{status=body[0]??0;sn=body[1]??0;off=2;if(cmd===0x01&&body.length>=3){xmOp=body[2];off=3}}
+  return{flag,cmd,len,isCmd,hasResp,sn,xmOp,status,statusName:status==null?null:statusName(status),payload:body.subarray(off),body,raw:u}}
+
+const RESP_KINDS=['fe-response','fe-push','sideband-data','generic-ack','timeout'];
+// Классификация одного кадра (или его отсутствия)
+function classifyFrame(ch,u){
+  if(!u)return{kind:'timeout'};
+  if(u[0]===0xFE&&u[1]===0xDC&&u[2]===0xBA){const i=feInner(u);return{kind:i.isCmd?'fe-push':'fe-response',...i,ch}}
+  const f=parse9E(u);
+  if(f){const ack=f.cmd===0xFF&&f.len===2;
+    return{kind:ack?'generic-ack':'sideband-data',ch,cmd:f.cmd,len:f.len,payload:f.payload,chkOk:f.ok,
+      echo:ack?f.payload[0]:null,status:ack?f.payload[1]:null,raw:u}}
+  return{kind:'unknown',ch,raw:u}}
+const isRealResponse=r=>r&&(r.kind==='fe-response'||r.kind==='sideband-data');
+const kindRu={
+  'fe-response':['FE-ответ (реальный)','FE response (real)'],'fe-push':['FE-команда устройства','device FE command'],
+  'sideband-data':['9E-данные (реальные)','9E data (real)'],'generic-ack':['транспортный ACK (не исполнение)','transport ACK (not execution)'],
+  timeout:['таймаут','timeout'],unknown:['не разобрано','unparsed']};
+const kindTxt=k=>(kindRu[k]||[k,k])[S.set.lang==='en'?1:0];
+
+/* Запись FE-кадра в AE01 с фрагментацией: парсер JieLi собирает поток,
+   поэтому один кадр можно резать на несколько writeWithoutResponse (ebadge-python-cli). */
+async function rcspWrite(frame,note){
+  const cs=Math.max(20,Math.min(490,S.set.chunk|0||490));
+  if(frame.length<=cs)return w('ae01',frame,note);
+  for(let i=0;i<frame.length;i+=cs)await w('ae01',frame.subarray(i,Math.min(i+cs,frame.length)),note?`${note} [${i}]`:'');
+}
+// Команда телефона: sn проставляется автоматически, если payload не начинается с явного sn
+async function rcspCmd(cmd,payload=[],ms=S.set.reqTo,{sn=null,note='',flag=FE_FLAG.cmd}={}){
+  const s=sn==null?nextSN():sn,body=Uint8Array.of(s,...bytesOf(payload));
+  const p=waitFor((k,u)=>k==='ae02'&&u[0]===0xFE&&u[4]===cmd&&(u[3]&0x80)===0,ms);p.catch(()=>{});
+  await rcspWrite(fe(flag,cmd,body),note||`RCSP ${hx(cmd)} ${opName(cmd)}`);
+  try{const r=await p;return{...classifyFrame('ae02',r.u),sn:s,ok:true}}
+  catch(e){return{kind:'timeout',cmd,sn:s,ok:false,error:e.message}}}
+// Ответ телефона на команду/пуш устройства (обязателен для 0x01/0x0D/0xE5/0xE8/0x20/0x1C)
+async function rcspAck(cmd,sn,status=0,payload=[],xmOp=null,note=''){
+  const body=[status&255,sn&255];if(cmd===0x01&&xmOp!=null)body.push(xmOp&255);
+  return rcspWrite(fe(FE_FLAG.resp,cmd,Uint8Array.of(...body,...bytesOf(payload))),note||`ACK ${hx(cmd)} sn=${hx(sn)}`)}
+
+/* Маршрутизация входящих FE-команд устройства.
+   Активная сессия (browse / OTA / content) регистрирует хук и сама решает, что ACKать.
+   Всё, что не перехвачено, ACKается автоматически — иначе сессия девайса залипает. */
+const rcspHooks=new Set();
+const rcspHook=fn=>{rcspHooks.add(fn);return()=>rcspHooks.delete(fn)};
+const NO_AUTO_ACK=new Set([0x01,0x0D,0x1C,0x1D,0x20,0xE5,0xE8]);
+function rcspRoute(k,u){
+  if(k!=='ae02'||u[0]!==0xFE)return false;
+  const i=feInner(u);if(!i.isCmd)return false;
+  for(const h of rcspHooks){try{if(h(i,u)===true)return true}catch(e){log('EV',k,null,'hook: '+e.message)}}
+  if(NO_AUTO_ACK.has(i.cmd))return false; // ждём владельца сессии; без него не ACKаем вслепую
+  rcspAck(i.cmd,i.sn,0,[],i.cmd===0x01?i.xmOp:null,'auto-ACK '+hx(i.cmd)).catch(()=>{});
+  return true}
+
+/* Запрос с полной классификацией: слушаем AE02 + FD01/FD03/FD05 и возвращаем ВСЁ,
+   что пришло, чтобы generic-ack никогда не выдавался за успех. */
+async function probeFrame(transport,bytes,ms,{expect=null,note=''}={}){
+  validateReadOnlyProbe(transport,bytes);
+  if(!S.P||!S.P.auth.ok)throw new Error('нужен auth');
+  if(S.conn!=='on'||!S.gattReady)throw new Error('устройство не подключено');
+  if(!Number.isFinite(ms)||ms<500||ms>10000)throw new Error('окно ответа должно быть от 500 до 10000 мс');
+  const got=[],t0=performance.now();
+  const stop=collectFrames(r=>got.push(r),ms);
+  try{await (transport==='fd02'?w('fd02',bytes,note):rcspWrite(bytes,note))}catch(e){stop();return{kind:'timeout',error:e.message,frames:got,ms:performance.now()-t0}}
+  await stop.done;
+  const real=got.filter(r=>isRealResponse(r)&&(expect==null||r.cmd===expect));
+  const best=real.find(r=>r.kind==='fe-response')||real[0]||got.find(r=>r.kind==='generic-ack')||got.find(r=>r.kind==='fe-push')||null;
+  return{...(best||{kind:'timeout'}),frames:got,ms:Math.round(performance.now()-t0),
+    ackOnly:!real.length&&got.some(r=>r.kind==='generic-ack')}}
+// Сбор всех кадров за окно ms (без исключений по таймауту)
+function collectFrames(onFrame,ms){
+  let done,res;const pr=new Promise(r=>res=r);
+  const wt={pred:(k,u)=>{onFrame(classifyFrame(k,u));return false},res:()=>{},rej:()=>{}};
+  S.waiters.push(wt);
+  const id=setTimeout(()=>{S.waiters=S.waiters.filter(x=>x!==wt);res();done=true},ms);
+  return{done:pr,stop:()=>{if(done)return;clearTimeout(id);S.waiters=S.waiters.filter(x=>x!==wt);res();done=true}}}
+
+// Оценка ATT MTU по максимальным уведомлениям (Web Bluetooth MTU не отдаёт)
+const mtuGuess=()=>Math.max(23,(S.maxNotify.ae02||0)+3);
 
 /* ---- src/protocol/auth.js ---- */
 /* ===== auth: 6-шаговый handshake JieLi на AE01/AE02 (порт qix-ble auth.py, сверен с btsnoop) ===== */
@@ -986,7 +1285,7 @@ async function authHandshake(ms){
 /* ===== meta: паспорт устройства ===== */
 const timePayload=(d=new Date())=>{const y=d.getFullYear();return[y&255,y>>8,d.getMonth()+1,d.getDate(),0,d.getHours(),d.getMinutes()]}; // год LE (qix-ble)
 const ackOk=p=>p.then(()=>true,()=>false);
-// Bootstrap Phase 1–5, ack-tolerant — последовательность из qix-ble bootstrap.py; открывает battery push и TEST_GET_*
+// Bootstrap Phase 1–5, ack-tolerant — последовательность из qix-ble bootstrap.py.
 async function bootstrapFull(ms){const r={},rc=c=>ackOk(waitFor((k,u)=>k==='ae02'&&isFE(u,c),ms));let a;
   a=rc(0x06);await w('ae01',fe(0xC0,0x06,[0x02,0x00,0x01]),'reset_auth 0x06');
   await w('fd02',[0x9E,0xBD,0x0B,0x60,0x0D,0x00,0x03],'phase1 trigger (verbatim)').catch(()=>{});r.p1=await a;
@@ -1003,14 +1302,19 @@ async function collectMeta(){
   const t0=Date.now(),left=()=>Math.max(300,Math.min(S.set.reqTo,12000-(Date.now()-t0)));
   S.boot=false;
   S.P={deviceId:S.dev.id,name:S.dev.name||null,chipFamily:'unknown',sdkString:null,fwVersion:null,productName:null,battery:{level:null,charging:null,mode:null},gatt:S.gatt,
-    capabilities:{qixFd00:!!(S.chars.fd01&&S.chars.fd02&&S.chars.fd03),rcspOta:!!(S.chars.ae01&&S.chars.ae02),batteryService:!!S.chars['2a19']},auth:{ok:false,keyProfile:null},
-    testModeSuspected:!!S.flags.testMode,profileId:null,capturedAt:null,bootMarker:false,display:null,mac:null,targetInfo:null,sysInfo:null,variant:null,charIds:Object.keys(S.chars).sort()};
+    capabilities:{qixFd00:!!S.chars.fd00,rcspOta:false,rcspOtaProbe:false,rcspTransport:!!(S.chars.ae01&&S.chars.ae02),batteryService:!!S.chars['2a19']},auth:{ok:false,keyProfile:null},
+    testModeSuspected:!!S.flags.testMode,profileId:null,capturedAt:null,bootMarker:false,display:null,mac:null,targetInfo:null,sysInfo:null,decoded:null,
+    unsupported:[],transport:{rcsp:!!(S.chars.ae01&&S.chars.ae02),sideband:!!(S.chars.fd01&&S.chars.fd02&&S.chars.fd03),qixFd00:!!S.chars.fd00},
+    variant:null,charIds:Object.keys(S.chars).sort()};
   render();
   const step=async(n,f,force)=>{if(!force&&Date.now()-t0>12000)return log('EV','',null,n+': skipped (budget)');try{await f()}catch(e){log('EV','',null,`${n}: ${e.message}`)}};
   await step('name',async()=>{if(S.chars['2a00'])S.P.name=new TextDecoder().decode(await gq(()=>S.chars['2a00'].readValue()))||S.P.name});
   await step('passive',()=>sleep(Math.min(600,left())));
   await step('auth',async()=>{S.P.auth=await authHandshake(left())});
-  if(S.P.auth.ok)await step('bootstrap',async()=>{const r=await bootstrapFull(Math.min(1500,left()));S.boot=true;log('EV','',null,'bootstrap '+JSON.stringify(r))});
+  if(S.P.auth.ok){
+    await step('feature_map',async()=>{const r=await rcspCmd(0x02,[],left(),{note:'target_feature_map 0x02'});if(r.kind==='fe-response'&&r.status===0&&r.payload.length>=4){
+      S.P.featureMap={mask:be32(r.payload),decoded:decodeFeatureMap(be32(r.payload))}}});
+    await step('bootstrap',async()=>{const r=await bootstrapFull(Math.min(1500,left()));S.boot=true;log('EV','',null,'bootstrap '+JSON.stringify(r))})}
   else{if(S.set.rcspPreAuth){
       await step('0x03',()=>req('ae01',fe(0xC0,0x03,[nextSN(),0xFF,0xFF,0xFF,0xFF,0x01]),(k,u)=>k==='ae02'&&isFE(u,0x03),'target_info (pre-auth)',left()));
       await step('0x07',()=>req('ae01',fe(0xC0,0x07,[nextSN(),0xFF,0xFF,0xFF,0xFF,0xFF]),(k,u)=>k==='ae02'&&isFE(u,0x07),'sys_info (pre-auth)',left()))}
@@ -1019,8 +1323,718 @@ async function collectMeta(){
   if(S.P.battery.level==null)await step('battery',async()=>{
     await waitFor((k,u)=>k==='fd01'&&u[3]===0x27,1500).catch(()=>{});if(S.P.battery.level==null)S.P.battery.level=await readBatt()},true);
   S.P.chipFamily=familyOf(S.P.sdkString);S.P.profileId=matchProfile(S.P,S.profiles);
-  S.P.variant=S.P.capabilities.qixFd00?'Qix FD01–FD03 + RCSP AE00':'RCSP AE00 only';S.P.maxNotify={...S.maxNotify};S.P.capturedAt=new Date().toISOString();
+  S.P.variant=S.P.capabilities.qixFd00?'Qix characteristic + RCSP AE00':S.P.transport.sideband?'FD01–FD05 sideband + RCSP AE00':'RCSP AE00 only';
+  const profile=S.P.profileId&&S.profiles[S.P.profileId];
+  S.P.unsupported=profile&&profile.unsupported?profile.unsupported.slice():[];
+  S.P.fileTransfer=S.P.decoded&&S.P.decoded.targetInfo&&S.P.decoded.targetInfo.fields.fileTransfer?
+    S.P.decoded.targetInfo.fields.fileTransfer.hex:null;
+  S.P.authProfile=S.P.auth.keyProfile;
+  S.P.transport={...S.P.transport,...(profile&&profile.transport||{})};
+  if(profile){S.P.chip=profile.chip||null;S.P.family=profile.family||S.P.chipFamily;S.P.sdk=profile.sdk||S.P.sdkString}
+  S.P.maxNotify={...S.maxNotify};S.P.capturedAt=new Date().toISOString();
   log('EV','',null,`passport ${Date.now()-t0} ms, auth=${S.P.auth.ok} boot=${S.boot} profile=${S.P.profileId}`);idb('passports',S.P);toast(t('meta'),S.P.profileId?'ok':'warn');render()}
+
+/* ---- src/protocol/probe.js ---- */
+/* ===== protocol/probe — Raw Probe, сканер опкодов, карта возможностей (Фаза 1) =====
+ * Скан ограничен коротким allowlist подтверждённых read-only команд; остальные пропускаются.
+ * Каждый результат классифицируется: fe-response / fe-push / sideband-data / generic-ack / timeout.
+ * generic-ack НИКОГДА не считается поддержкой функции (ТЗ §0.2).
+ */
+const PROBE={running:false,scan:[],last:null,progress:0};
+const PROBE_FE_SAFE=new Set([0x02,0x03,0x07,0xE1,0xE2,0xE6]);
+const PROBE_9E_SAFE=new Set([0xC6]);
+function validateReadOnlyProbe(transport,u){
+  if(transport==='ae01'){
+    if(u.length<8||u[0]!==0xFE||u[1]!==0xDC||u[2]!==0xBA||u[u.length-1]!==0xEF||u[3]!==0xC0)
+      throw new Error('Ожидается полный FE DC BA C0 ... EF request');
+    const len=(u[5]<<8)|u[6],bodyLen={0x02:1,0x03:6,0x07:6,0xE1:1,0xE2:2,0xE6:1}[u[4]];
+    if(u.length!==len+8||!PROBE_FE_SAFE.has(u[4])||len!==bodyLen)throw new Error('Команда не входит в allowlist точных read-only RCSP кадров')}
+  else if(transport==='fd02'){
+    const f=parse9E(u);
+    if(!f||!f.complete||u.length!==f.len+6||!f.ok||!PROBE_9E_SAFE.has(f.cmd)||f.flags!==0x0B||f.len!==1||f.payload[0]!==1)
+      throw new Error('Разрешён только подтверждённый C6 → C7 screen-info запрос')}
+  else throw new Error('Неизвестный транспорт')}
+// Доказательства из полевого лога 2026-11-14 (data/session-2026-11-14.log) — стартовая карта
+const EVIDENCE_SEED=[
+  {op:0x06,transport:'AE01',kind:'fe-response',len:2,status:0,verdict:'ok',dataHex:'',note:'Phase-1 reset_auth, устройство отвечает FE',src:'log'},
+  {op:0x03,transport:'AE01',kind:'fe-response',len:125,status:0,verdict:'ok',dataHex:'02 00 20 05 01 00 00 00 00 09 02 46 88 00 02 09 DC',note:'target_info: полный TLV 125 Б; dataHex приведён префиксом',src:'log'},
+  {op:0x07,transport:'AE01',kind:'fe-response',len:56,status:0,verdict:'ok',dataHex:'00 1A 02 04 00 00 00 00',note:'sys_info: TLV 56 Б; dataHex приведён префиксом',src:'log'},
+  {op:0xC6,transport:'FD02',kind:'sideband-data',len:13,status:null,verdict:'ok',dataHex:'01 68 01 68 01 70 01 70 01 F4 10 00 00',note:'C6 → C7 screen_info 360/360/368/368',src:'log'},
+  {op:0x27,transport:'FD01',kind:'sideband-data',len:2,status:null,verdict:'ok',dataHex:'',note:'battery push [mode=00, percent=5B–5D] = 91–93%',src:'log'},
+  {op:0x21,transport:'FD01',kind:'sideband-data',len:2,status:null,verdict:'ok',note:'sync_state',src:'log'},
+  {op:0x22,transport:'FD01',kind:'sideband-data',len:21,status:null,verdict:'stub',note:'steps: заглушка watch-SDK (датчиков нет)',src:'log'},
+  {op:0x24,transport:'FD01',kind:'sideband-data',len:7,status:null,verdict:'stub',note:'hr: заглушка watch-SDK',src:'log'},
+  {op:0xA0,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'A0 00',note:'Qix SET_TEST_MODE: только транспортный ACK, 8 проб без данных',src:'log'},
+  {op:0xAA,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'AA 00',note:'TEST_GET_FLASH 256/128/64/16 Б × 2 сеанса — данных нет',src:'log'},
+  {op:0xA6,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'A6 00',note:'TEST_CLOSE: только ACK; после него нужен power-cycle',src:'log'}];
+
+/* Raw Probe accepts only the bounded read-only request allowlist. */
+async function rawProbe({transport='ae01',hexBytes='',ms=null,note='raw probe'}={}){
+  const u=fromHex(hexBytes);
+  if(!u.length)throw new Error('пустой кадр');
+  validateReadOnlyProbe(transport,u);
+  const wait=Math.max(500,Math.min(10000,Number(ms)||S.set.probeTo));
+  const r=await probeFrame(transport,u,wait,{note});
+  const rec={ts:new Date().toISOString(),transport,tx:hex(u),kind:r.kind,ms:r.ms,
+    frames:(r.frames||[]).map(f=>({kind:f.kind,ch:f.ch,cmd:f.cmd==null?null:hx(f.cmd),status:f.status==null?null:hx(f.status),
+      len:f.payload?f.payload.length:(f.len??null),hex:f.raw?hex(f.raw):''})),
+    verdict:r.kind==='timeout'?'нет ответа':isRealResponse(r)?'реальный ответ':r.kind==='fe-push'?'неожиданный FE push':'только транспортный ACK'};
+  PROBE.last=rec;S.rawLog.unshift(rec);if(S.rawLog.length>200)S.rawLog.pop();
+  log('EV',transport,null,`raw probe → ${rec.verdict} (${rec.kind}, ${rec.frames.length} кадр(ов), ${rec.ms} мс)`);
+  renderLab();return rec}
+// Удобные построители кадров для панели
+const buildFeCmd=(cmd,payload=[],sn=null)=>fe(FE_FLAG.cmd,cmd&255,Uint8Array.of(sn==null?nextSN():sn,...bytesOf(payload)));
+const build9E=(flags,cmd,payload=[])=>qixEncode(flags,cmd&255,bytesOf(payload));
+
+/* Систематический скан 0x00…0xFF (read-only) */
+async function scanOpcodes({from=0,to=255,transport='ae01',ms=null}={}){
+  if(PROBE.running)throw new Error('скан уже идёт');
+  if(transport!=='ae01')throw new Error('автоматизированный скан доступен только для RCSP AE01');
+  if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||to>255||from>to)throw new Error('диапазон опкодов должен быть от 0 до 255');
+  if(!S.P||!S.P.auth.ok)throw new Error('нужен auth');
+  PROBE.running=true;S.abort=false;PROBE.scan=[];
+  const wait=Math.max(500,Math.min(10000,Number(ms)||S.set.scanTo)),total=to-from+1;let done=0;
+  log('EV','',null,`скан опкодов ${hx(from)}…${hx(to)} по ${transport}, окно ${wait} мс, read-only`);
+  try{
+    for(let op=from;op<=to;op++){
+      if(S.abort){log('EV','',null,'скан прерван');break}
+      done++;PROBE.progress=done/total;
+      if(!scanAllowed(op)){PROBE.scan.push({op,opHex:hx(op),skipped:true,reason:'нет в allowlist read-only команд',kind:'skipped'});renderLab();continue}
+      const payload=op===0x03?[0xFF,0xFF,0xFF,0xFF,0x01]:op===0x07?[0x00,0xFF,0xFF,0xFF,0xFF]:op===0xE2?[0x00]:[];
+      const frame=buildFeCmd(op,payload);
+      const r=await probeFrame(transport,frame,wait,{note:`scan ${hx(op)}`});
+      const f=r.frames||[];
+      const real=f.filter(x=>isRealResponse(x)&&x.cmd===op);
+      const best=real[0]||f.find(x=>x.kind==='generic-ack')||f.find(x=>x.kind==='fe-push')||null;
+      const rec={op,opHex:hx(op),name:opName(op),cls:opClass(op),transport,
+        kind:best?best.kind:'timeout',status:best&&best.status!=null?best.status:null,
+        len:best?(best.payload?best.payload.length:best.len??0):0,
+        dataHex:best&&best.payload?hex(best.payload.subarray(0,64)):'',
+        frames:f.length,ms:r.ms,
+        verdict:best?(isRealResponse(best)?(best.status===0||best.status==null?'ok':'status '+statusName(best.status)):best.kind==='fe-push'?'unsolicited-push':'ack-only'):'нет ответа',
+        confidence:best&&isRealResponse(best)?'measured':'measured-negative'};
+      PROBE.scan.push(rec);
+      if(best&&isRealResponse(best))log('EV','',null,`scan ${hx(op)} ${opName(op)} → ${best.kind} len=${rec.len} status=${rec.status==null?'—':statusName(rec.status)}`);
+      renderLab()}
+    S.scan=PROBE.scan;S.capMatrix=buildCapabilityMatrix();
+    log('EV','',null,`скан завершён: ${PROBE.scan.filter(x=>x.verdict==='ok').length} подтверждённых, ${PROBE.scan.filter(x=>x.kind==='generic-ack').length} ack-only, ${PROBE.scan.filter(x=>x.kind==='timeout').length} молчащих`);
+    toast('скан завершён','ok');return PROBE.scan}
+  finally{PROBE.running=false;renderLab()}}
+
+/* Карта возможностей: скан + полевые доказательства + паспорт */
+function buildCapabilityMatrix(){
+  const rows=[],seen=new Set();
+  const push=r=>{rows.push(r);seen.add(r.transport+':'+r.op)};
+  for(const s of PROBE.scan.filter(x=>!x.skipped))push({op:s.op,opHex:s.opHex,name:s.name,transport:s.transport==='fd02'?'FD02':'AE01',
+    kind:s.kind,status:s.status,len:s.len,dataHex:s.dataHex,verdict:s.verdict,confidence:s.confidence,source:'scan',
+    sdk:(opInfo(s.op)||{}).sdk_name||null,note:(opInfo(s.op)||{}).semantics||null});
+  for(const e of EVIDENCE_SEED)if(!seen.has(e.transport+':'+e.op))push({op:e.op,opHex:hx(e.op),name:opName(e.op),transport:e.transport,kind:e.kind,
+    status:e.status,len:e.len,dataHex:e.dataHex||'',verdict:e.verdict,confidence:'field-log',source:'field-capture',note:e.note,
+    sdk:(opInfo(e.op)||{}).sdk_name||null});
+  const P=S.P;
+  return{artifact:'capability-matrix.json',generatedAt:new Date().toISOString(),
+    device:P?{deviceId:P.deviceId,name:P.name,chipFamily:P.chipFamily,sdkString:P.sdkString,fwVersion:P.fwVersion,profileId:P.profileId,
+      uboot:P.decoded&&P.decoded.targetInfo?P.decoded.targetInfo.fields.ubootVersion:null}:null,
+    rules:{success:'matching fe-response or relevant sideband-data; fe-push and generic-ack are not success',
+      notSuccess:'generic-ack (9E … FF 02 00 echo status) — только приём байтов',
+      scanPayload:'per-opcode read-only request bodies; unknown/write opcodes are skipped',
+      skipped:'all commands outside the read-only allowlist'},
+    unsupported:(P&&P.unsupported)||['0xA0','0xAA','0xA6','qix-ota','ble-raw-dump'],
+    count:rows.length,rows:rows.sort((a,b)=>a.op-b.op)}}
+const exportMatrix=()=>download('capability-matrix.json',S.capMatrix||buildCapabilityMatrix());
+
+/* Диагностика транспорта: MTU, каналы, подписки */
+function transportReport(){
+  return{chars:Object.keys(S.chars).sort(),notifySubscribed:NOTIFY.filter(k=>S.chars[k]),maxNotify:{...S.maxNotify},
+    mtuGuess:mtuGuess(),qixFd00:!!S.chars.fd00,rcsp:!!(S.chars.ae01&&S.chars.ae02),
+    sideband:!!(S.chars.fd01&&S.chars.fd02),fd05:!!S.chars.fd05}}
+
+/* ---- src/protocol/filebrowse.js ---- */
+/* ===== protocol/filebrowse — RCSP-браузер файлов + выгрузка ресурсов (Фаза 2) =====
+ * Кадры byte-exact из qix-ble rcsp_session.browse() / ebadge-python-cli file_browse.py:
+ *   0x0C: sn type readNum startIndex:2BE devHandler:4BE pathLen:2(LE|BE) path:N*4BE
+ *   ответы: 0x0C status, затем пуши 0x01 (xmOp=0x0C) с записями, финал 0x0D → ОБЯЗАТЕЛЬНО ACK.
+ * Малые файлы: 0x28 op=0 (список по типу), op=1 (чтение id/offset/len).
+ */
+const BROWSE={running:false,tree:[],files:[],manifest:null,lastError:null};
+const browseParam=(o)=>{
+  const path=bytesOf((o.clusters||[]).flatMap(c=>[(c>>>24)&255,(c>>>16)&255,(c>>>8)&255,c&255]));
+  const pl=path.length,le=o.pathLenLE!==false; // capture: LE; SDK-комментарий: BE — переключаемо, авто-ретрай
+  return Uint8Array.of(o.type&255,o.readNum&255,(o.startIndex>>8)&255,o.startIndex&255,
+    (o.devHandler>>>24)&255,(o.devHandler>>>16)&255,(o.devHandler>>>8)&255,o.devHandler&255,
+    le?pl&255:(pl>>8)&255,le?(pl>>8)&255:pl&255,...path)};
+
+async function browseOnce(o){
+  const opt={type:0,readNum:32,startIndex:0,devHandler:3,clusters:[],pathLenLE:true,...o};
+  const chunks=[];let stopped=false,pushes=0;
+  const un=rcspHook(i=>{
+    if(i.cmd===0x01&&i.xmOp===0x0C){chunks.push(i.payload);pushes++;rcspAck(0x01,i.sn,0,[],0x0C).catch(()=>{});return true}
+    if(i.cmd===0x0D){rcspAck(0x0D,i.sn,0).catch(()=>{});stopped=true;return true}
+    return false});
+  try{
+    const r=await rcspCmd(0x0C,browseParam(opt),S.set.reqTo,{note:`browse ${DEV_HANDLERS[opt.devHandler]||opt.devHandler} type=${opt.type} clusters=[${opt.clusters}]`});
+    if(r.kind==='timeout')return{...opt,ok:false,reason:'timeout',entries:[],pushes:0};
+    if(r.status!==0)return{...opt,ok:false,reason:'status '+hx(r.status)+' '+statusName(r.status),entries:[],pushes:0,status:r.status};
+    const end=Date.now()+S.set.browseTo;
+    while(!stopped&&Date.now()<end&&!S.abort)await sleep(60);
+    const buf=chunks.reduce((out,chunk)=>cat(out,chunk),new Uint8Array(0));
+    const dec=decodeBrowseEntries(buf,opt.type);
+    return{...opt,ok:true,status:0,entries:dec.entries,pushes,dataHex:hex(buf,''),bytes:buf.length,trailing:dec.trailing,stopped}}
+  finally{un()}}
+
+// Обход всех устройств (USB/SD0/SD1/Flash) + рекурсия по папкам
+async function browseAll({deep=true,maxDepth=3,readNum=32}={}){
+  if(BROWSE.running)throw new Error('browse уже идёт');
+  BROWSE.running=true;S.abort=false;BROWSE.tree=[];BROWSE.files=[];BROWSE.lastError=null;
+  const t0=Date.now();
+  try{
+    for(const dev of DEV_LIST){
+      if(S.abort)break;
+      let root=await browseOnce({type:0,devHandler:dev,readNum});
+      // pathLen endianness не решена на железе (bitfields/open_question): пробуем обе
+      if(!root.ok&&root.reason==='timeout'){const alt=await browseOnce({type:0,devHandler:dev,readNum,pathLenLE:false});if(alt.ok)root=alt}
+      const node={dev,devName:DEV_HANDLERS[dev],ok:root.ok,reason:root.reason||null,children:[],files:[]};
+      BROWSE.tree.push(node);renderLab();
+      if(!root.ok){log('EV','',null,`browse ${DEV_HANDLERS[dev]}: ${root.reason}`);continue}
+      log('EV','',null,`browse ${DEV_HANDLERS[dev]}: ${root.entries.length} записей (${root.bytes} Б, push=${root.pushes})`);
+      await walk(node,root.entries,[],1);
+    }
+    BROWSE.manifest=await buildResourcesManifest();
+    log('EV','',null,`browse готов: ${BROWSE.files.length} файлов, ${Date.now()-t0} мс`);
+    return BROWSE}
+  finally{BROWSE.running=false;renderLab()}
+  async function walk(node,entries,path,depth){
+    for(const e of entries){
+      if(S.abort)return;
+      const full=[...path,e.name].join('/');
+      if(e.isFile){const f={...e,path:full,dev,node};node.files.push(f);BROWSE.files.push(f);continue}
+      node.children.push({...e,path:full,children:[],files:[]});
+      if(!deep||depth>=maxDepth)continue;
+      const sub=node.children[node.children.length-1];
+      const r=await browseOnce({type:1,devHandler:e.devIndex!=null?dev:dev,readNum,clusters:[e.cluster]});
+      if(r.ok&&r.entries.length){log('EV','',null,`  ${full}: ${r.entries.length} записей`);await walk(sub,r.entries,[...path,e.name],depth+1)}
+      else if(!r.ok)log('EV','',null,`  ${full}: ${r.reason}`);
+      renderLab()}}}
+
+/* Малые файлы 0x28 — реально работающий путь чтения ресурсов на watch-SDK */
+async function listSmallFiles(){
+  const out=[];
+  for(const t of SMALL_FILE_TYPES){
+    if(S.abort)break;
+    const r=await rcspCmd(0x28,[0x00,t.type],S.set.reqTo,{note:`small list ${t.name}`});
+    if(r.kind==='timeout'){log('EV','',null,`0x28 list ${t.name}: timeout`);continue}
+    if(r.status!==0){log('EV','',null,`0x28 list ${t.name}: ${statusName(r.status)}`);continue}
+    const items=parseSmallFileList(t.type,t.name,r.payload||new Uint8Array(0));
+    log('EV','',null,`0x28 list ${t.name}: ${items.length} шт`);out.push(...items)}
+  return out}
+async function readSmallFile(e,{offset=0,len=null}={}){
+  const maxLen=Math.min(0xFFFF,len||Math.max(e.size||0,256));
+  const body=Uint8Array.of(0x01,e.type&255,(e.id>>8)&255,e.id&255,(offset>>8)&255,offset&255,(maxLen>>8)&255,maxLen&255,0x01);
+  const r=await rcspCmd(0x28,body,Math.max(S.set.reqTo,9000),{note:`small read ${e.typeName||e.type} id=${hx(e.id)} len=${maxLen}`});
+  if(r.kind==='timeout')return{ok:false,error:'timeout',data:new Uint8Array(0)};
+  if(r.status!==0)return{ok:false,error:'RCSP '+statusName(r.status),data:new Uint8Array(0)};
+  return parseSmallFileRead(r.payload||new Uint8Array(0))}
+
+/* Выгрузка: для каждого файла — small read по id; пишем sha256 и собираем манифест. */
+async function fetchResources({limit=0}={}){
+  if(!BROWSE.files.length&&!S.smallFiles.length)throw new Error('сначала выполните обход (browse / small files)');
+  const targets=[...BROWSE.files.map(f=>({id:f.id,type:1,typeName:'file',name:f.path,size:f.size,src:'browse'})),
+    ...S.smallFiles.map(f=>({id:f.id,type:f.type,typeName:f.typeName,name:`${f.typeName}/${f.id}.bin`,size:f.size,src:'0x28'}))];
+  const list=limit?targets.slice(0,limit):targets;
+  S.res=[];S.abort=false;S.prog={done:0,total:list.length,t0:performance.now(),start:0,win:0};
+  for(const t of list){
+    if(S.abort)break;
+    try{const r=await readSmallFile(t);
+      if(r.ok&&r.data.length){const sha=await sha256hex(r.data);
+        S.res.push({...t,bytes:r.data.length,sha256:sha,crc16:r.crc16,crcOk:r.crc16!=null?crc16(r.data)===r.crc16:null,data:r.data,variant:r.variant});
+        log('EV','',null,`fs get ${t.name}: ${r.data.length} Б sha256=${sha.slice(0,12)}… crc=${hx(r.crc16)}`)}
+      else log('EV','',null,`fs get ${t.name}: ${r.error||'пусто'}`)}
+    catch(e){log('EV','',null,`fs get ${t.name}: ${e.message}`)}
+    S.prog.done++;renderLab()}
+  S.resManifest=await buildResourcesManifest();
+  toast(`ресурсов: ${S.res.length}/${list.length}`,S.res.length?'ok':'warn');renderLab();return S.res}
+
+async function buildResourcesManifest(){
+  const items=[];
+  for(const r of S.res||[])items.push({name:r.name,path:r.name,source:r.src,type:r.type,id:r.id,bytes:r.bytes,sha256:r.sha256,crc16:r.crc16==null?null:hx(r.crc16),crcVerified:r.crcOk});
+  return{artifact:'resources-manifest.json',generatedAt:new Date().toISOString(),
+    device:S.P?{deviceId:S.P.deviceId,name:S.P.name,fwVersion:S.P.fwVersion,profileId:S.P.profileId,chipFamily:S.P.chipFamily}:null,
+    transport:'RCSP AE00 (0x0C browse + 0x28 small-file read)',
+    note:'ресурсы прошивки (циферблаты/картинки/шрифты/конфиги). Код прошивки, uboot и chipkey этим путём НЕ доступны.',
+    browseTree:BROWSE.tree.map(n=>({dev:n.devName,ok:n.ok,reason:n.reason,files:n.files.map(f=>({path:f.path,id:f.id,cluster:f.cluster})),
+      children:n.children.map(c=>({path:c.path,cluster:c.cluster,files:c.files.map(f=>({path:f.path,id:f.id}))}))})),
+    count:items.length,items}}
+
+/* ZIP без зависимостей (store, без сжатия) — чтобы выгрузить ресурсы одним файлом */
+const CRC32T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC32T[(c^u[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
+function zipStore(files){
+  const enc=new TextEncoder(),parts=[],central=[];let offset=0;
+  const d16=n=>[n&255,(n>>8)&255],d32=n=>[n&255,(n>>8)&255,(n>>16)&255,(n>>>24)&255];
+  for(const f of files){
+    const nm=enc.encode(f.name),data=bytesOf(f.data),c=crc32(data);
+    const local=Uint8Array.of(...d32(0x04034b50),...d16(20),...d16(0x0800),...d16(0),...d16(0),...d16(0),...d32(c),...d32(data.length),...d32(data.length),...d16(nm.length),...d16(0),...nm);
+    parts.push(local,data);
+    central.push(Uint8Array.of(...d32(0x02014b50),...d16(20),...d16(20),...d16(0x0800),...d16(0),...d16(0),...d16(0),...d32(c),...d32(data.length),...d32(data.length),
+      ...d16(nm.length),...d16(0),...d16(0),...d16(0),...d16(0),...d32(0),...d32(offset),...nm));
+    offset+=local.length+data.length}
+  const cd=catN(...central),end=Uint8Array.of(...d32(0x06054b50),...d16(0),...d16(0),...d16(files.length),...d16(files.length),...d32(cd.length),...d32(offset),...d16(0));
+  return catN(...parts,cd,end)}
+function exportResourcesZip(){
+  if(!S.res||!S.res.length)return toast('нет выгруженных ресурсов','warn');
+  const files=S.res.map(r=>({name:r.name.replace(/^\/+/,''),data:r.data}));
+  files.push({name:'resources-manifest.json',data:new TextEncoder().encode(JSON.stringify(S.resManifest,null,2))});
+  download('resources.zip',zipStore(files));toast('resources.zip ✓','ok')}
+
+/* ---- src/protocol/ota.js ---- */
+/* ===== protocol/ota — RCSP OTA: read-only зонд + прошивка под интерлоком (Фаза 3) =====
+ * Порт qix-ble rcsp_ota.py (MIT) ← JieLi rcsp_update_master.c.
+ * Модель PULL: устройство само запрашивает блоки (0xE5 [off:4BE][len:2BE]), телефон отвечает байтами.
+ * READ-ONLY: 0xE1 (offset), 0xE2 (can-update), 0xE6 (status). ЗАПИСЬ: 0xE3/0xE5/0xE7/0xE8 — только после armOta().
+ * Двухэтапный сценарий (single-bank): E6=0x80 → 0x0B{00,01} на ЖИВОЙ ссылке → ждём, что девайс сам её оборвёт →
+ * reconnect → attr9==1 (loader) → E3 → повторная отдача → E6 → E7. E1/E2 во втором проходе НЕ повторяются.
+ */
+const OTA={armed:false,running:false,phase:'idle',probe:null,e1:null,canUpdate:null,status:null,progress:0,highWater:0,
+  pass:1,relinkFlag:null,result:null,history:[],error:null};
+const otaLog=m=>{OTA.history.push({ts:new Date().toISOString(),msg:m});log('EV','',null,'OTA '+m);renderLab()};
+
+// Информация о банках из target_info attr 8 — читать ДО любых попыток OTA (bitfields.md §4)
+function otaBankInfo(){
+  const dp=S.P&&S.P.decoded&&S.P.decoded.targetInfo&&S.P.decoded.targetInfo.fields.doublePartition;
+  return dp||{known:false,mode:'неизвестно (нет attr 8)',passes:null}}
+
+/* ---------- READ-ONLY зонд ---------- */
+async function otaProbe(){
+  if(OTA.running)throw new Error('OTA занята');
+  if(!S.P||!S.P.auth.ok)throw new Error('нужен auth');
+  OTA.e1=null;OTA.canUpdate=null;OTA.status=null;
+  OTA.running=true;OTA.error=null;OTA.phase='probing';renderLab();
+  const t0=Date.now(),out={at:new Date().toISOString(),banks:otaBankInfo(),steps:[]};
+  try{
+    // 0xE1 — где лежит блок информации о файле (read-only)
+    const e1=await rcspCmd(0xE1,[],S.set.reqTo,{note:'OTA E1 file-info-offset'});
+    out.steps.push({op:'0xE1',kind:e1.kind,status:e1.status,dataHex:e1.payload?hex(e1.payload,''):''});
+    if(e1.kind==='fe-response'&&e1.status===0&&e1.payload&&e1.payload.length>=6){
+      OTA.e1={offset:be32(e1.payload),len:be16(e1.payload,4)};out.e1=OTA.e1;
+      otaLog(`E1: offset=${hx(OTA.e1.offset)} len=${OTA.e1.len}`)}
+    else otaLog('E1: '+(e1.kind==='timeout'?'timeout — сток не экспортирует OTA':statusName(e1.status)));
+    // mark: если устройство отключило блок информации (offset=len=0) — референсный мастер шлёт один 0x00
+    const mark=OTA.e1&&!(OTA.e1.offset===0&&OTA.e1.len===0)&&S.buf?new Uint8Array(S.buf).subarray(OTA.e1.offset,OTA.e1.offset+OTA.e1.len):Uint8Array.of(0);
+    const e2=await rcspCmd(0xE2,mark,S.set.reqTo,{note:'OTA E2 inquire-can-update (read-only)'});
+    out.steps.push({op:'0xE2',kind:e2.kind,status:e2.status,dataHex:e2.payload?hex(e2.payload,''):''});
+    if(e2.kind==='fe-response'&&e2.status===0&&e2.payload&&e2.payload.length){OTA.canUpdate=e2.payload[0];out.canUpdate=OTA.canUpdate;out.canUpdateText=e2txt(OTA.canUpdate);
+      otaLog(`E2: can_update=${hx(OTA.canUpdate)} — ${e2txt(OTA.canUpdate)}`)}
+    else otaLog('E2: '+(e2.kind==='timeout'?'timeout':statusName(e2.status)));
+    const e6=await rcspCmd(0xE6,[],S.set.reqTo,{note:'OTA E6 refresh-status (read-only)'});
+    out.steps.push({op:'0xE6',kind:e6.kind,status:e6.status,dataHex:e6.payload?hex(e6.payload,''):''});
+    if(e6.kind==='fe-response'&&e6.status===0&&e6.payload&&e6.payload.length){OTA.status=e6.payload[0];out.status=OTA.status;out.statusText=e6txt(OTA.status);
+      otaLog(`E6: status=${hx(OTA.status)} — ${e6txt(OTA.status)}`)}
+    else otaLog('E6: '+(e6.kind==='timeout'?'timeout':statusName(e6.status)));
+    out.verdict=OTA.canUpdate!=null?'RCSP E2 ответил; это не подтверждает возможность прошивки':
+      out.steps.every(s=>s.kind==='timeout')?'OTA не экспортируется стоковой прошивкой (все таймауты)':'неоднозначно — см. шаги';
+    if(S.P&&S.P.capabilities)S.P.capabilities.rcspOtaProbe=out.steps.some(s=>s.op==='0xE2'&&s.kind==='fe-response');
+    out.dtMs=Date.now()-t0;OTA.probe=out;S.otaProbe=out;
+    log('EV','',null,'OTA probe: '+out.verdict);toast(out.verdict,OTA.canUpdate!=null?'ok':'warn');
+    return out}
+  catch(e){OTA.error=e.message;throw e}
+  finally{OTA.running=false;OTA.phase='idle';renderLab()}}
+
+/* ---------- Интерлок записи ---------- */
+function otaGates(){
+  const P=S.P,dp=otaBankInfo(),img=S.R,w=S.wired||{};
+  return[
+    {id:'G-CONN',ok:S.conn==='on'&&S.gattReady,msg:'GATT жив'},
+    {id:'G-AUTH',ok:!!(P&&P.auth.ok),msg:'RCSP auth пройден'},
+    {id:'G-PROBE',ok:OTA.canUpdate===0,msg:'0xE2 = 0x00 (устройство согласно)',ev:OTA.canUpdate==null?'зонд не выполнен':e2txt(OTA.canUpdate)},
+    {id:'G-IMAGE',ok:!!(img&&S.buf),msg:'Загружен образ прошивки (.ufw/.bin)'},
+    {id:'G-KEY',ok:!!(img&&img.chipkey!=null)&&!!w.chipkey&&img.chipkey===w.chipkey,msg:'chipkey образа = chipkey устройства (снят проводом)',
+      ev:`img=${img&&img.chipkey!=null?hx(img.chipkey):'—'} dev=${w.chipkey?hx(w.chipkey):'—'}`},
+    {id:'G-UBOOT',ok:!!(w.ubootVersion&&P&&P.decoded&&P.decoded.targetInfo&&P.decoded.targetInfo.fields.ubootVersion!=null),msg:'uboot прочитан и записан в паспорт'},
+    {id:'G-BATT',ok:!!(P&&P.battery.level!=null&&(P.battery.level>=30||P.battery.charging)),msg:'Батарея ≥ 30%'},
+    {id:'G-BANK',ok:dp.known!==false,msg:'Известна схема банков (attr 8)',ev:dp.mode},
+    {id:'G-BACKUP',ok:!!(S.dumpCert&&S.dumpCert.verified),msg:'Есть verified дамп для восстановления'},
+    {id:'G-TEST',ok:!S.flags.testMode&&!S.flags.dump&&!S.flags.probe,msg:'TEST_MODE/probe не активны'},
+    {id:'G-PHRASE',ok:($('#otaPhrase')&&$('#otaPhrase').value.trim().toUpperCase()===t('phraseWord'))&&($('#otaAck')&&$('#otaAck').checked),msg:'Фраза + подтверждение риска'}]}
+const otaCanArm=()=>otaGates().every(g=>g.ok);
+function armOta(){
+  if(!otaCanArm())return toast('интерлок: не все условия выполнены','block');
+  OTA.armed=true;otaLog('ЗАПИСЬ РАЗБЛОКИРОВАНА (arm) — 0xE3/0xE5/0xE7 разрешены');renderLab()}
+function disarmOta(){OTA.armed=false;otaLog('запись заблокирована (disarm)');renderLab()}
+
+/* ---------- Очередь кадров устройства для pull-цикла ---------- */
+function otaQueue(){
+  const q=[];let wake=null;
+  const un=rcspHook(i=>{
+    if(i.cmd===0xE5||i.cmd===0xE8||(i.cmd===0xE3&&(i.status!=null))||i.cmd===0xE6){q.push(i);if(wake){const f=wake;wake=null;f()}return true}
+    return false});
+  return{un,async next(ms){const end=Date.now()+ms;
+    while(!q.length&&Date.now()<end&&!S.abort)await new Promise(r=>{wake=r;setTimeout(r,Math.min(60,Math.max(1,end-Date.now())))});
+    return q.shift()||null}}}
+
+/* ---------- Прошивка (PULL) ---------- */
+async function otaFlash(){
+  if(!OTA.armed)throw new Error('E-OTA-LOCK: запись заблокирована интерлоком');
+  if(OTA.running)throw new Error('OTA занята');
+  if(!S.buf)throw new Error('нет образа');
+  const ufw=new Uint8Array(S.buf);OTA.running=true;S.abort=false;OTA.error=null;OTA.pass=1;OTA.highWater=0;OTA.result=null;
+  S.prog={done:0,total:ufw.length,t0:performance.now(),start:0,win:0};
+  const wl=await wakeHold();
+  try{
+    setPhase('preflight');
+    if(OTA.canUpdate!==0){const p=await otaProbe();if(OTA.canUpdate!==0)throw new Error('E-OTA-001 устройство не согласно: '+e2txt(OTA.canUpdate))}
+    let result;
+    if(OTA.pass===1){
+      const e1=OTA.e1||{offset:0,len:0};
+      const mark=!(e1.offset===0&&e1.len===0)?ufw.subarray(e1.offset,e1.offset+e1.len):Uint8Array.of(0);
+      if(!(e1.offset===0&&e1.len===0)&&e1.offset+e1.len>ufw.length)throw new Error('E-OTA-002 E1 требует байты за пределами файла — не тот образ');
+      const e2=await rcspCmd(0xE2,mark,S.set.reqTo,{note:'OTA E2'});
+      if(e2.kind!=='fe-response'||!e2.payload||e2.payload[0]!==0)throw new Error('E-OTA-001 E2='+hx(e2.payload&&e2.payload[0]));
+      setPhase('armed');await rcspCmd(0xE3,[],S.set.reqTo,{note:'OTA E3 enter-update'}); // девайс может не ответить и сразу начать тянуть данные
+      setPhase('transferring');result=await otaServe(ufw)}
+    if(result===0x80){ // loader загружен → relink, НЕ разрываем ссылку сами
+      otaLog('E6=0x80: loader загружен, шлём 0x0B и ждём, что устройство само оборвёт связь');
+      const sw=await rcspCmd(0x0B,[0x00,0x01],6000,{note:'OTA 0x0B switch-communication-way'});
+      OTA.relinkFlag=sw.payload&&sw.payload.length?sw.payload[0]:null;
+      setPhase('rebooting');
+      const dropped=await waitConn(false,25000);
+      if(!dropped)otaLog('устройство не оборвало связь за 25 с — пробуем reconnect сами');
+      setPhase('resuming');
+      const back=await otaRelink();
+      if(!back)throw new Error('E-OTA-003 не удалось вернуться к loader. НЕ прошивайте вслепую — восстановление проводом.');
+      await authHandshake(S.set.reqTo);
+      const loader=await otaIsLoader();
+      otaLog('pass 2: attr9 loader='+loader);
+      OTA.pass=2;setPhase('transferring');
+      await rcspCmd(0xE3,[],S.set.reqTo,{note:'OTA E3 pass2'}); // E1/E2 в pass 2 НЕ повторяем
+      result=await otaServe(ufw)}
+    OTA.result=result;
+    if(result!==0)throw new Error('E-OTA-004 E6='+hx(result)+' '+e6txt(result));
+    setPhase('rebooting');await rcspCmd(0xE7,[0x00],4000,{note:'OTA E7 reboot'}).catch(()=>{});
+    otaLog('E7 отправлен, ждём возврата устройства');
+    await waitConn(false,20000);await waitConn(true,60000);
+    setPhase('verifying-marker');await collectMeta();
+    setPhase('done');toast('OTA завершена: E6=0x00','ok');chime();
+    return result}
+  catch(e){OTA.error=e.message;setPhase('error');otaLog('✕ '+e.message);
+    if(/E-OTA-004|E-OTA-003/.test(e.message)){S.locked=true;disarmOta()}
+    throw e}
+  finally{OTA.running=false;if(wl)wl.release().catch(()=>{});renderLab()}}
+
+async function otaServe(ufw){
+  const Q=otaQueue(),total=ufw.length;let idle=0;
+  try{
+    for(;;){
+      if(S.abort)throw new Error('E-ABORT');
+      const i=await Q.next(S.set.otaLoopTo);
+      if(!i){idle++;otaLog('кадров нет '+S.set.otaLoopTo/1000+' с — опрашиваю E6');
+        const r=await rcspCmd(0xE6,[],S.set.reqTo,{note:'OTA E6 poll'});
+        if(r.kind==='fe-response'&&r.payload&&r.payload.length)return r.payload[0];
+        if(idle>=3)throw new Error('E-OTA-002 устройство перестало запрашивать блоки');continue}
+      idle=0;
+      if(i.cmd===0xE5){
+        const off=i.payload.length>=4?be32(i.payload):0,len=i.payload.length>=6?be16(i.payload,4):0;
+        if(off===0&&len===0){await rcspAck(0xE5,i.sn,0,[],null,'OTA E5 done-signal');
+          const r=await rcspCmd(0xE6,[],S.set.reqTo,{note:'OTA E6 after done'});
+          return r.kind==='fe-response'&&r.payload&&r.payload.length?r.payload[0]:0xFF}
+        if(off+len>total){await rcspAck(0xE5,i.sn,0x01,[],null,'OTA E5 out-of-range');throw new Error(`E-OTA-002 запрос за пределами образа: ${hx(off)}+${len}`)}
+        const chunk=ufw.subarray(off,off+len);
+        await rcspAck(0xE5,i.sn,0,chunk,null,`OTA E5 [${hx(off)}+${len}]`);
+        if(off+len>OTA.highWater){OTA.highWater=off+len;S.prog.done=OTA.highWater;OTA.progress=OTA.highWater/total;tick();renderLab()}}
+      else if(i.cmd===0xE8){const size=i.payload.length>=4?be32(i.payload):0;otaLog('E8 content-size='+size);await rcspAck(0xE8,i.sn,0,[],null,'OTA E8 ack')}
+      else if(i.cmd===0xE6&&i.status!=null){return i.payload.length?i.payload[0]:0xFF}
+      else if(i.cmd===0xE3){otaLog('E3 ack status='+hx(i.status))}}}
+  finally{Q.un()}}
+
+async function otaRelink(){
+  try{await gattUp();if(S.gattReady)return true}catch(e){otaLog('reconnect: '+e.message)}
+  // Устройство могло вернуться под ДРУГИМ адресом (маркер JLOTA) — Web Bluetooth требует нового выбора
+  toast(t('otaRelink'),'block');S.otaRelinkNeeded=true;renderLab();
+  const end=Date.now()+90000;
+  while(Date.now()<end&&!S.abort){await sleep(1000);if(S.gattReady&&S.dev&&S.dev.gatt.connected)return true}
+  return false}
+// attr9 mandatory_upgrade_flag = 1 → мы говорим с loader'ом, а не с приложением
+async function otaIsLoader(){
+  const r=await rcspCmd(0x03,[0xFF,0xFF,0xFF,0xFF,0x00],S.set.reqTo,{note:'OTA 0x03 (loader check)'});
+  if(r.kind!=='fe-response')return null;
+  const a=parseTlv(r.payload||new Uint8Array(0)).find(x=>x.type===9);
+  return a&&a.data.length?a.data[0]===1:null}
+// Наблюдение за рекламой JLOTA (Chrome: watchAdvertisements, может быть недоступен)
+async function watchJlOta(){
+  const d=S.dev;if(!d||!d.watchAdvertisements)return toast('watchAdvertisements недоступен в этом браузере','warn');
+  const ac=new AbortController();S.advAc=ac;
+  d.addEventListener('advertisementreceived',e=>{
+    for(const[,v]of e.manufacturerData||[]){const u=new Uint8Array(v.buffer.slice(v.byteOffset,v.byteOffset+v.byteLength));
+      const p=parseJlOtaAdv(u);if(p){S.jlOta=p;log('EV','',null,`JLOTA adv: MAC ${p.mac}`);toast('JLOTA: '+p.mac,'ok');renderLab()}}},{signal:ac.signal});
+  try{await d.watchAdvertisements({signal:ac.signal});toast('слежу за рекламой JLOTA…')}catch(e){toast('adv: '+e.message,'warn')}}
+const wakeHold=async()=>{try{return'wakeLock'in navigator?await navigator.wakeLock.request('screen'):null}catch{return null}};
+
+/* ---- src/media/media.js ---- */
+/* ===== media — подготовка контента: JPEG для декодера JieLi + MJPG AVI =====
+ * Порт auracast (MIT): sanitizeJpegForBadge + buildMjpgAvi.
+ * Важно: APP1..APP15 (ICC/EXIF/Adobe) ВЫРЕЗАЮТСЯ — иначе бейдж рисует только первые строки.
+ */
+const E87_PIC=368;            // размер картинки для панели 360×360 (auracast E87_IMAGE_WIDTH/HEIGHT)
+const MAX_UPLOAD_BYTES=900000;
+const catN=(...us)=>{const n=us.reduce((s,u)=>s+u.length,0),o=new Uint8Array(n);let p=0;for(const u of us){o.set(u,p);p+=u.length}return o};
+const fcc=s=>Uint8Array.from(s,c=>c.charCodeAt(0)&255);
+const u32le=v=>Uint8Array.of(v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255);
+const u16le=v=>Uint8Array.of(v&255,(v>>>8)&255);
+const padEven=d=>d.length&1?catN(d,new Uint8Array(1)):d;
+const riffChunk=(id,d)=>catN(fcc(id),u32le(d.length),padEven(d));
+const riffList=(type,...ch)=>{const inner=catN(fcc(type),...ch);return catN(fcc('LIST'),u32le(inner.length),inner)};
+
+function sanitizeJpeg(jpeg){
+  if(jpeg.length<4||jpeg[0]!==0xFF||jpeg[1]!==0xD8)return jpeg;
+  const out=[jpeg.subarray(0,2)];let i=2,stripped=false;
+  while(i<jpeg.length-1){
+    while(i<jpeg.length&&jpeg[i]===0xFF&&jpeg[i+1]===0xFF)i++;
+    if(jpeg[i]!==0xFF)break;
+    const m=jpeg[i+1];
+    if(m===0xD8||m===0xD9){out.push(jpeg.subarray(i));break}
+    if(m===0xDA){out.push(jpeg.subarray(i));break}
+    if(i+4>jpeg.length)break;
+    const len=(jpeg[i+2]<<8)|jpeg[i+3],end=i+2+len;
+    if(end>jpeg.length)break;
+    if(m>=0xE1&&m<=0xEF){stripped=true;i=end;continue}
+    out.push(jpeg.subarray(i,end));i=end}
+  return stripped?catN(...out):jpeg}
+
+function buildMjpgAvi(rawFrames,{width=E87_PIC,height=E87_PIC,fps=null}={}){
+  if(!rawFrames.length)throw new Error('нет кадров');
+  const frames=rawFrames.map(sanitizeJpeg);
+  const rate=Math.max(1,Math.min(120,Math.round(fps||(frames.length<=6?1:12))));
+  const usec=Math.round(1e6/rate),maxSize=frames.reduce((m,f)=>Math.max(m,f.length),0),n=frames.length;
+  const avih=riffChunk('avih',catN(u32le(usec),u32le(25000),u32le(0),u32le(0x0910),u32le(n),u32le(0),u32le(1),u32le(0x00100000),u32le(width),u32le(height),new Uint8Array(16)));
+  const strh=riffChunk('strh',catN(fcc('vids'),fcc('MJPG'),u32le(0),u16le(0),u16le(0),u32le(0),u32le(1),u32le(rate),u32le(0),u32le(n),u32le(maxSize),u32le(0xFFFFFFFF),u32le(0),
+    u16le(0),u16le(0),u16le(width),u16le(height)));
+  const strf=riffChunk('strf',catN(u32le(40),u32le(width),u32le(height),u16le(1),u16le(24),fcc('MJPG'),u32le(width*height*3),u32le(0),u32le(0),u32le(0),u32le(0)));
+  const junkSuper=new Uint8Array(4120);junkSuper[0]=4;junkSuper.set(fcc('00dc'),8);
+  const strl=riffList('strl',strh,strf,riffChunk('JUNK',junkSuper));
+  const vprp=riffChunk('vprp',catN(u32le(0),u32le(0),u32le(rate),u32le(width),u32le(height),u32le(1|(1<<16)),u32le(width),u32le(height),u32le(1),
+    u32le(width),u32le(height),u32le(width),u32le(height),u32le(0),u32le(0),u32le(0),u32le(0)));
+  const hdrl=riffList('hdrl',avih,strl,vprp,riffChunk('JUNK',new Uint8Array(260)));
+  const info=riffList('INFO',riffChunk('ISFT',fcc('BadgeGuard\0')));
+  const headerSoFar=12+hdrl.length+info.length+8;
+  const align=riffChunk('JUNK',new Uint8Array(Math.max(0,5742-headerSoFar-8)));
+  const movi=riffList('movi',...frames.map(f=>riffChunk('00dc',f)));
+  const idx=[];let off=4;
+  for(const f of frames){idx.push(catN(fcc('00dc'),u32le(0x10),u32le(off),u32le(f.length)));off+=8+f.length+(f.length&1)}
+  const idx1=riffChunk('idx1',catN(...idx));
+  const content=catN(fcc('AVI '),hdrl,info,align,movi,idx1);
+  return catN(fcc('RIFF'),u32le(content.length),content)}
+
+/* ---------- Canvas: рендер кадров ---------- */
+const picSize=()=>{const d=S.P&&S.P.display;return d&&d.w2?Math.min(1024,d.w2):E87_PIC};
+function newCanvas(n){const c=document.createElement('canvas');c.width=c.height=n;return c}
+async function canvasJpeg(c,q=0.88){
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',q));
+  if(!blob)throw new Error('canvas.toBlob недоступен');
+  return sanitizeJpeg(new Uint8Array(await blob.arrayBuffer()))}
+function drawCover(ctx,src,n,mode='cover'){
+  const sw=src.width||src.videoWidth,sh=src.height||src.videoHeight;
+  ctx.fillStyle='#000';ctx.fillRect(0,0,n,n);
+  if(mode==='contain'){const k=Math.min(n/sw,n/sh),w=sw*k,h=sh*k;ctx.drawImage(src,(n-w)/2,(n-h)/2,w,h);return}
+  const k=Math.max(n/sw,n/sh),w=sw*k,h=sh*k;ctx.drawImage(src,(n-w)/2,(n-h)/2,w,h)}
+async function bitmapOf(file){
+  if('createImageBitmap'in window)try{return await createImageBitmap(file)}catch{}
+  return await new Promise((res,rej)=>{const img=new Image();img.onload=()=>res(img);img.onerror=()=>rej(new Error('не удалось декодировать изображение'));img.src=URL.createObjectURL(file)})}
+// Одиночный кадр (картинка / QR / статичный текст)
+async function imageToJpeg(file,{size=picSize(),quality=0.88,fit='cover'}={}){
+  const bmp=await bitmapOf(file),c=newCanvas(size);drawCover(c.getContext('2d'),bmp,size,fit);
+  if(bmp.close)bmp.close();return await canvasJpeg(c,quality)}
+// Текст / danmaku: несколько кадров прокрутки
+function textFrames(text,{size=picSize(),fps=12,frames=24,mode='scroll',font='bold 64px sans-serif',color='#22D3EE',bg='#000'}={}){
+  const c=newCanvas(size),ctx=c.getContext('2d');ctx.textBaseline='middle';ctx.font=font;
+  const lines=String(text).split('\n'),out=[];
+  const lh=size/(lines.length+1);
+  for(let i=0;i<frames;i++){
+    ctx.fillStyle=bg;ctx.fillRect(0,0,size,size);ctx.fillStyle=color;ctx.font=font;
+    const p=i/frames;
+    lines.forEach((ln,k)=>{
+      const tw=ctx.measureText(ln).width;
+      const x=mode==='scroll'?size-p*(tw+size):(size-tw)/2;
+      const y=mode==='scroll'?size/2+(k-(lines.length-1)/2)*lh:(k+1)*lh;
+      ctx.fillText(ln,x,y)});
+    out.push(c)}
+  return out}
+async function textToAvi(text,opts={}){
+  const o={size:picSize(),fps:12,frames:24,quality:0.85,...opts};
+  const cs=textFrames(text,o),frames=[];
+  for(const c of cs)frames.push(await canvasJpeg(c,o.quality));
+  return buildMjpgAvi(frames,{width:o.size,height:o.size,fps:o.fps})}
+// Слайдшоу: несколько картинок → AVI с низким fps
+async function slideshowToAvi(files,{size=picSize(),fps=1,quality=0.85}={}){
+  const frames=[];for(const f of files)frames.push(await imageToJpeg(f,{size,quality}));
+  return buildMjpgAvi(frames,{width:size,height:size,fps})}
+// Видео → кадры через <video> + seek (без WebCodecs, работает везде)
+async function videoToFrames(file,{fps=12,maxFrames=120,size=picSize(),quality=0.8,onProgress=null}={}){
+  const url=URL.createObjectURL(file),v=document.createElement('video');
+  v.muted=true;v.playsInline=true;v.src=url;
+  try{
+    await new Promise((res,rej)=>{v.onloadedmetadata=res;v.onerror=()=>rej(new Error('видео не декодируется браузером'));setTimeout(()=>rej(new Error('timeout видео')),15000)});
+    const dur=Math.min(v.duration||1,60),step=1/fps,n=Math.min(maxFrames,Math.max(1,Math.floor(dur*fps)));
+    const c=newCanvas(size),ctx=c.getContext('2d'),out=[];
+    for(let i=0;i<n;i++){
+      if(S.abort)break;
+      await new Promise(res=>{v.onseeked=res;v.currentTime=Math.min(dur-0.05,i*step);setTimeout(res,1200)});
+      drawCover(ctx,v,size);out.push(await canvasJpeg(c,quality));
+      if(onProgress)onProgress(i+1,n)}
+    return{frames:out,fps,duration:dur}}
+  finally{URL.revokeObjectURL(url)}}
+// GIF → кадры через WebCodecs ImageDecoder, если он есть
+async function gifToFrames(file,{size=picSize(),maxFrames=60,quality=0.85}={}){
+  if(!('ImageDecoder'in window))return null;
+  const dec=new ImageDecoder({data:await file.arrayBuffer(),type:'image/gif'});
+  await dec.completed;
+  const n=Math.min(maxFrames,dec.tracks.selectedTrack.frameCount||1),c=newCanvas(size),ctx=c.getContext('2d'),out=[];let fps=10;
+  for(let i=0;i<n;i++){
+    const{image}=await dec.decode({frameIndex:i});
+    if(image.duration&&i===0)fps=Math.max(1,Math.min(30,Math.round(1e6/image.duration)));
+    drawCover(ctx,image,size);out.push(await canvasJpeg(c,quality));image.close()}
+  dec.close();return{frames:out,fps}}
+// Подгонка под бюджет устройства: понижаем качество, пока не влезем
+async function fitFrames(frames,{budget=MAX_UPLOAD_BYTES,width,height,fps}={}){
+  let total=frames.reduce((s,f)=>s+f.length,0);
+  if(total<=budget)return{frames,fps,bytes:total,fits:true};
+  const c=newCanvas(width||picSize()),ctx=c.getContext('2d');
+  for(const q of[0.75,0.6,0.5,0.4,0.3,0.22]){
+    const out=[];
+    for(const f of frames){const bmp=await createImageBitmap(new Blob([f],{type:'image/jpeg'}));drawCover(ctx,bmp,c.width);bmp.close();out.push(await canvasJpeg(c,q))}
+    total=out.reduce((s,f)=>s+f.length,0);
+    if(total<=budget)return{frames:out,fps,bytes:total,fits:true,quality:q}}
+  return{frames,fps,bytes:total,fits:false}}
+
+/* ---- src/protocol/content.js ---- */
+/* ===== protocol/content — контент-путь E87: картинка / видео / GIF / текст / слайдшоу =====
+ * Порт ebadge-python-cli rcsp_transfer.py (MIT) ← web-bluetooth-e87. Фазы 6–10:
+ *   0x21 session-open → 0x27 xfer-params → 0x1B metadata(size BE32, crc16 BE16, rnd2, "xxxxxx.tmp\0")
+ *   → окно: устройство шлёт push 0x1D [status][win:2BE][nextOffset:4BE], мы отдаём кадры 0x01/xmOp=0x1D
+ *     [slot][crcHi][crcLo][data] → 0x20 FILE_COMPLETE (отвечаем UTF-16LE путём) → 0x1C finalize.
+ * Это РАБОЧИЙ путь на стоке (в отличие от raw-дампа) — ТЗ Фаза 5.
+ */
+const CONTENT={running:false,mode:'image',payload:null,info:null,progress:0,result:null,error:null,chunkSize:490,windows:0};
+const crc16be=n=>[(n>>8)&255,n&255];
+const tmpName=()=>Math.floor(Math.random()*0xFFFFFF).toString(16).padStart(6,'0')+'.tmp';
+// Ответ на 0x20: путь в UTF-16LE с префиксом U+555C, как в официальном приложении
+function filePathResponse(sn,mode){
+  const d=new Date(),p=n=>String(n).padStart(2,'0');
+  const stamp=`${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  const ext=(mode==='image'||mode==='qr')?'.jpg':'.avi',path='\u555C'+stamp+ext;
+  const u=new Uint8Array(path.length*2+2);
+  for(let i=0;i<path.length;i++){u[i*2]=path.charCodeAt(i)&255;u[i*2+1]=(path.charCodeAt(i)>>8)&255}
+  return u}
+
+function contentQueue(){
+  const q=[];let wake=null;
+  const un=rcspHook(i=>{
+    if(i.cmd===0x1D||i.cmd===0x20||i.cmd===0x1C){q.push(i);if(wake){const f=wake;wake=null;f()}return true}
+    return false});
+  return{un,async next(ms){const end=Date.now()+ms;
+    while(!q.length&&Date.now()<end&&!S.abort)await new Promise(r=>{wake=r;setTimeout(r,Math.min(60,Math.max(1,end-Date.now())))});
+    return q.shift()||null}}}
+
+async function contentUpload(payload,mode='image',{onProgress=null}={}){
+  if(CONTENT.running)throw new Error('передача уже идёт');
+  if(!S.P||!S.P.auth.ok)throw new Error('нужен auth');
+  if(!S.chars.ae01)throw new Error('E-GATT-001 AE01');
+  if(payload.length>MAX_UPLOAD_BYTES)log('EV','',null,`внимание: ${payload.length} Б > бюджета ${MAX_UPLOAD_BYTES} Б — устройство может отказаться`);
+  CONTENT.running=true;CONTENT.mode=mode;CONTENT.error=null;CONTENT.result=null;CONTENT.windows=0;S.abort=false;
+  S.prog={done:0,total:payload.length,t0:performance.now(),start:0,win:0};
+  const wl=await wakeHold();const Q=contentQueue();
+  const total=payload.length,fileCrc=crc16(payload);
+  try{
+    setPhase('preflight');
+    // Фаза 6: session open
+    const s21=await rcspCmd(0x21,[0x00],8000,{note:'content 0x21 session-open'});
+    if(s21.kind!=='fe-response')throw new Error('E-CNT-001 0x21: '+kindTxt(s21.kind));
+    if(s21.status!==0)throw new Error('E-CNT-001 0x21 status '+statusName(s21.status));
+    // Фаза 7: параметры передачи
+    const s27=await rcspCmd(0x27,[0,0,0,0,0x02,0x01],8000,{note:'content 0x27 xfer-params'});
+    if(s27.kind!=='fe-response')throw new Error('E-CNT-001 0x27: '+kindTxt(s27.kind));
+    // Фаза 8: метаданные файла
+    const nm=new TextEncoder().encode(tmpName());
+    const meta=Uint8Array.of((total>>>24)&255,(total>>>16)&255,(total>>>8)&255,total&255,...crc16be(fileCrc),
+      Math.floor(Math.random()*256),Math.floor(Math.random()*256),...nm,0);
+    const s1b=await rcspCmd(0x1B,meta,8000,{note:`content 0x1B metadata ${total} B crc=${hx(fileCrc)}`});
+    if(s1b.kind!=='fe-response')throw new Error('E-CNT-001 0x1B: '+kindTxt(s1b.kind));
+    if(s1b.status!==0)throw new Error('E-CNT-001 0x1B status '+statusName(s1b.status));
+    let cs=490;
+    if(s1b.payload&&s1b.payload.length>=2){const v=be16(s1b.payload);if(v>0&&v<=4096)cs=v}
+    CONTENT.chunkSize=cs;log('EV','',null,`content: chunk=${cs} Б, кадров=${Math.ceil(total/cs)}`);
+    setPhase('transferring');
+    // Фаза 9: оконная передача, устройство задаёт offset и размер окна
+    let ev=await Q.next(10000);
+    if(!ev)throw new Error('E-CNT-002 нет первого окна 0x1D за 10 с');
+    let seq=nextSN(),sent=0;
+    for(;;){
+      if(S.abort)throw new Error('E-ABORT');
+      if(ev.cmd===0x1D){
+        const p=ev.payload||new Uint8Array(0);
+        if(p.length<7){ev=await Q.next(15000);if(!ev)throw new Error('E-CNT-002 окно не пришло');continue}
+        const st=p[0],win=be16(p,1),next=be32(p,3);
+        CONTENT.windows++;
+        if(st!==0)log('EV','',null,`окно: status=${hx(st)} (${statusName(st)})`);
+        if(win===0&&next>=total){log('EV','',null,'окно: передача завершена устройством');break}
+        let off=next,slot=0,inWin=0;
+        while(inWin<win&&off<total){
+          const len=Math.min(cs,total-off,win-inWin),data=payload.subarray(off,off+len),c=crc16(data);
+          await rcspWrite(fe(FE_FLAG.push,0x01,Uint8Array.of(seq&255,0x1D,slot&255,...crc16be(c),...data)),`content data @${hx(off)} +${len}`);
+          seq=(seq+1)&255;slot=(slot+1)&7;off+=len;inWin+=len;sent=off;
+          S.prog.done=off;CONTENT.progress=off/total;tick();
+          if(onProgress)onProgress(off,total);
+          if(S.set.chunkDelay)await sleep(S.set.chunkDelay)}
+        S.prog.win=CONTENT.windows;renderLab();
+        ev=await Q.next(15000);
+        if(!ev){if(off>=total){ev=await Q.next(10000);if(!ev)throw new Error('E-CNT-002 нет завершения после передачи')}
+          else throw new Error(`E-CNT-002 таймаут окна на ${off}/${total}`)}
+        continue}
+      if(ev.cmd===0x20){ // FILE_COMPLETE — устройству нужен путь, таймаут у него жёсткий (~100 мс)
+        await rcspAck(0x20,ev.sn,0,filePathResponse(ev.sn,mode),null,'content 0x20 file-path');
+        const fin=await Q.next(10000);
+        if(fin&&fin.cmd===0x1C){const st=(fin.payload&&fin.payload.length)?fin.payload[0]:0xFF;
+          await rcspAck(0x1C,fin.sn,0,[],null,'content 0x1C ack');
+          CONTENT.result=st;break}
+        CONTENT.result=0;break}
+      if(ev.cmd===0x1C){const st=(ev.payload&&ev.payload.length)?ev.payload[0]:0xFF;
+        await rcspAck(0x1C,ev.sn,0,[],null,'content 0x1C ack');CONTENT.result=st;break}
+      ev=await Q.next(10000);if(!ev)throw new Error('E-CNT-002 таймаут ожидания завершения')}
+    setPhase('done');
+    const ok=CONTENT.result===0;
+    log('EV','',null,`content ${mode}: ${sent}/${total} Б, окон ${CONTENT.windows}, статус ${hx(CONTENT.result)}`);
+    toast(ok?'Контент отправлен ✓':'Устройство вернуло статус '+hx(CONTENT.result),ok?'ok':'block');
+    if(ok)chime();
+    return{ok,bytes:sent,total,windows:CONTENT.windows,status:CONTENT.result,chunkSize:cs,crc16:fileCrc}}
+  catch(e){CONTENT.error=e.message;setPhase('error');log('EV','',null,'content ✕ '+e.message);toast(e.message,'block');throw e}
+  finally{CONTENT.running=false;Q.un();if(wl)wl.release().catch(()=>{});renderLab()}}
+
+/* ---------- Прочие рабочие фичи (Фаза 5) ---------- */
+// Время: 9E 0x02, год LE (проверено на железе)
+async function syncTime(d=new Date()){
+  await qix(0x08,0x02,timePayload(d),'time sync');
+  log('EV','',null,'время отправлено: '+d.toLocaleString());toast('время синхронизировано','ok')}
+// Экран: C6 → C7
+async function readScreen(){
+  const r=await qreq(0xC6,[1],S.set.reqTo,{flags:0x0B,expect:0xC7}).catch(()=>null);
+  if(!r)return null;const d=decodeC7(r.payload);if(d&&S.P){S.P.display=d;render()}return d}
+// Яркость: чтение через 0x07 attr7 (COMMON_INFO_ATTR_LIGHT), запись — 9E 0x20 [0x16,0x01,0x00,level]
+async function readBrightness(){
+  const r=await rcspCmd(0x07,[0x00,0,0,0,0x80],S.set.reqTo,{note:'sys_info light (attr 7)'});
+  if(r.kind!=='fe-response'||r.status!==0)return null;
+  const a=parseTlv((r.payload||new Uint8Array(0)).subarray(1)).find(x=>x.type===7);
+  return a&&a.data.length?a.data[0]:null}
+async function setBrightness(level){
+  const v=Math.max(0,Math.min(100,Math.round(level)));
+  await qix(0x08,0x20,[0x16,0x01,0x00,v],'brightness '+v);
+  log('EV','',null,'яркость → '+v+' (семантика 9E 0x20 не подтверждена вендором)');return v}
+// Health: заглушки watch-SDK (peripherals_support=0). Показываем честно.
+async function readHealth(){
+  const out={stub:true,note:'периферия отсутствует (peripherals_support=0): значения — эмуляция watch-SDK, не измерения',items:[]};
+  for(const cmd of[0x22,0x24,0x21]){
+    const p=waitFor((k,u)=>k==='fd01'&&u[0]===0x9E&&u[3]===cmd,2500);p.catch(()=>{});
+    await qix(0x08,0xFF,[cmd,0x00],'health '+hx(cmd));
+    const r=await p.catch(()=>null);
+    out.items.push({cmd:hx(cmd),name:(QIX_OPS[cmd]||{}).n||'?',dataHex:r?hex(r.u.slice(6),''):null,kind:r?classifyFrame(r.k,r.u).kind:'timeout'})}
+  S.health=out;renderLab();return out}
 
 /* ---- src/image/image.js ---- */
 /* ===== image ===== */
@@ -1176,7 +2190,8 @@ async function certifyWired(){
   try{download('dump.cert.json',await certify(new Uint8Array(S.buf),S.P,dumpProf(S.buf.byteLength),'wired-uboot'))}catch(e){toast('cert: '+e.message,'block')}}
 
 // причины, по которым дамп недоступен — показываются под кнопками вместо «серой» без объяснений
-const dumpBlockers=()=>[S.conn!=='on'&&'h_conn',!(S.P&&S.P.auth.ok)&&'h_auth',!S.boot&&'h_boot',ACTIVE.includes(S.phase)&&'h_busy',!READBACK.ready&&'h_port'].filter(Boolean);
+const dumpBlockers=()=>[S.conn!=='on'&&'h_conn',!(S.P&&S.P.auth.ok)&&'h_auth',!S.boot&&'h_boot',ACTIVE.includes(S.phase)&&'h_busy',
+  S.P&&S.P.unsupported&&S.P.unsupported.includes('ble-raw-dump')?'h_dumpUnsupported':!READBACK.ready?'h_port':false].filter(Boolean);
 function renderInt(){
   const r=S.int,c=S.dumpCert,on=S.conn==='on',act=ACTIVE.includes(S.phase),ready=on&&!act&&S.P&&S.P.profileId;
   const sv=x=>x===true?'pass':x===false?'block':'warn';
@@ -1194,9 +2209,60 @@ function renderInt(){
   $('#btnRb').disabled=!(ready&&S.l0&&S.R&&READBACK.ready);$('#btnRh').disabled=!(ready&&S.l0&&S.R);
   $('#btnAccept').hidden=!(r&&r.verdict==='partial'&&!r.acceptedPartial);$('#btnCopyDig').disabled=!r;
   const db=dumpBlockers();$('#btnDump').disabled=!!db.length;$('#btnSpot').disabled=!!db.length||!S.dumpBuf;
-  $('#dumpHint').textContent=db.length?t('h_dump')+': '+db.map(t).join(', '):'';
+  $('#dumpHint').textContent=db.length?db.map(t).join(' · '):'';
   $('#btnCertWired').disabled=!(S.R&&S.R.kind==='full-dump'&&S.P&&!act);
   $('#btnExpCert').disabled=!c;$('#btnExpInt').disabled=!r}
+
+/* ---- src/ui/lab.js ---- */
+/* ===== Device tools: bounded, read-only probes and supported RCSP features ===== */
+const labBusy=()=>ACTIVE.includes(S.phase)||PROBE.running||BROWSE.running||OTA.running||CONTENT.running;
+const labConnected=()=>S.conn==='on'&&S.gattReady&&S.P&&S.P.auth.ok;
+
+async function sendLabProbe(){
+  const transport=$('#probeTransport').value,u=fromHex($('#probeHex').value),raw=$('#probeHex').value;
+  if(!/^[\da-f\s:,-]+$/i.test(raw)||raw.replace(/[\s:,-]/g,'').length%2)throw new Error('Hex должен содержать полные байты');
+  validateReadOnlyProbe(transport,u);
+  const ms=Math.max(500,Math.min(10000,Number($('#probeTimeout').value)||S.set.probeTo));
+  const result=await rawProbe({transport,hexBytes:hex(u,''),ms,note:'manual read-only probe'});
+  $('#rawResult').textContent=JSON.stringify(result,null,2);return result}
+
+function bindLab(){
+  const action=(id,fn)=>{$(id).onclick=()=>Promise.resolve().then(fn).catch(e=>{log('EV','',null,`device tool: ${e.message}`);toast(e.message,'warn')})};
+  action('#btnRaw',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');if(labBusy())throw new Error('Другая операция уже выполняется');await sendLabProbe()});
+  action('#btnExportMatrix',()=>download('capability-matrix.json',buildCapabilityMatrix()));
+  action('#btnBrowse',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');if(labBusy())throw new Error('Другая операция уже выполняется');await browseAll({deep:true,maxDepth:3})});
+  action('#btnSmallList',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');if(labBusy())throw new Error('Другая операция уже выполняется');S.smallFiles=await listSmallFiles();renderLab()});
+  action('#btnFetchResources',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');if(labBusy())throw new Error('Другая операция уже выполняется');await fetchResources()});
+  action('#btnExportResources',()=>exportResourcesZip());
+  action('#btnExportManifest',()=>{if(!S.resManifest)throw new Error('Сначала выполните поиск или выгрузку ресурсов');download('resources-manifest.json',S.resManifest)});
+  action('#btnOtaProbe',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');if(labBusy())throw new Error('Другая операция уже выполняется');await otaProbe()});
+  action('#btnScreen',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');const result=await readScreen();S.labScreen=result;renderLab()});
+  action('#btnHealth',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');await readHealth()});
+  action('#btnTime',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');await syncTime()});
+  action('#btnSendImage',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');if(labBusy())throw new Error('Другая операция уже выполняется');
+    const f=$('#contentImage').files[0];if(!f)throw new Error('Выберите изображение');
+    const jpeg=await imageToJpeg(f);await contentUpload(jpeg,'image');$('#contentImage').value=''});
+}
+
+function renderLab(){
+  const active=labBusy(),ready=labConnected();
+  for(const id of['#btnRaw','#btnBrowse','#btnSmallList','#btnFetchResources','#btnOtaProbe','#btnScreen','#btnHealth','#btnTime','#btnSendImage'])
+    $(id).disabled=!ready||active;
+  $('#btnExportResources').disabled=!S.res.length;
+  $('#btnExportManifest').disabled=!S.resManifest;
+  $('#btnExportMatrix').disabled=false;
+  const rows=[
+    S.labScreen&&`screen: ${JSON.stringify(S.labScreen)}`,
+    S.health&&`health (SDK stub): ${JSON.stringify(S.health)}`,
+    S.otaProbe&&`OTA probe: ${JSON.stringify(S.otaProbe)}`,
+    S.smallFiles.length&&`small files: ${JSON.stringify(S.smallFiles)}`,
+    BROWSE.tree.length&&`browse tree: ${JSON.stringify(BROWSE.tree.map(n=>({dev:n.devName,ok:n.ok,reason:n.reason,
+      files:n.files.map(({node,...f})=>f),children:n.children.map(({children,files,...c})=>({...c,files:files.map(({node,...f})=>f)}))})))}`,
+    S.res.length&&`resources: ${JSON.stringify(S.res.map(({data,node,...r})=>r))}`,
+    S.resManifest&&`manifest: ${JSON.stringify(S.resManifest)}`].filter(Boolean);
+  $('#labResult').textContent=rows.join('\n\n')||'—';
+  if(PROBE.last)$('#rawResult').textContent=JSON.stringify(PROBE.last,null,2);
+}
 
 /* ---- src/ui/render.js ---- */
 /* ===== render ===== */
@@ -1213,6 +2279,7 @@ function render(){
   kv('#passKv',P&&{name:P.name,deviceId:P.deviceId,chipFamily:P.chipFamily,sdkString:P.sdkString,fwVersion:P.fwVersion,productName:P.productName,
     display:P.display&&`${P.display.width}×${P.display.height} · ${P.display.w2}×${P.display.h2} · f5=${P.display.f5} f6=${P.display.f6} f7=${P.display.f7}`,variant:P.variant,mac:P.mac,targetInfo:P.targetInfo&&JSON.stringify(P.targetInfo),sysInfo:P.sysInfo&&JSON.stringify(P.sysInfo),
     battery:P.battery.level==null?'— (нет push 0x27)':`${P.battery.level}% (mode ${P.battery.mode??'—'})`,auth:P.auth.ok?'ok, profile '+P.auth.keyProfile:'—',profileId:P.profileId||'— (OTA BLOCK)',
+    fileTransfer:P.fileTransfer,unsupported:(P.unsupported||[]).join(', ')||'—',
     capabilities:Object.entries(P.capabilities).filter(x=>x[1]).map(x=>x[0]).join(', ')||'—',testModeSuspected:P.testModeSuspected,capturedAt:P.capturedAt},t('noDev'));
   $('#gattPre').textContent=S.gatt?Object.entries(S.gatt.chars).map(([s,c])=>s+'\n  '+c.join('\n  ')).join('\n'):'—';
   kv('#imgKv',R&&{fileName:R.fileName,size:`${R.size} B`,sha256:R.sha256,kind:R.kind,qixWrapped:R.qixWrapped,chipkey:hx(R.chipkey),ubootHash:R.ubootHash,appBinSize:hx(R.appBinSize),
@@ -1229,7 +2296,7 @@ function render(){
   $('#btnFlash').disabled=!gateOk()||act;$('#btnAbort').disabled=!ABORTABLE.includes(S.phase);
   $('#btnProbe').disabled=!QIX.ready||!on||!(P&&P.profileId)||act;$('#btnPC').disabled=act;$('#btnReport').disabled=!S.report;
   $('#btnRescan').disabled=!on||act;$('#btnConn').disabled=act||!navigator.bluetooth;
-  ring();renderInt()}
+  ring();renderInt();renderLab()}
 function renderAllow(){$('#alList').innerHTML=['image','uboot'].flatMap(k=>S.allow[k].map(h=>`<li><button class="btn btn--s" data-rm="${k}:${h}" aria-label="remove">✕</button>${k} ${h}</li>`)).join('')}
 function applyI18n(){document.documentElement.lang=S.set.lang;document.documentElement.dataset.theme=S.set.theme;
   document.querySelectorAll('[data-i18n]').forEach(e=>e.textContent=t(e.dataset.i18n));document.querySelectorAll('[data-i18n-ph]').forEach(e=>e.placeholder=t(e.dataset.i18nPh));
@@ -1259,6 +2326,7 @@ function init(){
   ['#phrase','#riskAck','#phoneBt'].forEach(s=>$(s).addEventListener('input',render));
   $('#btnFlash').onclick=flash;$('#btnAbort').onclick=()=>{if(ABORTABLE.includes(S.phase)){S.abort=true;if(QIX.abort)Promise.resolve().then(()=>QIX.abort({w,log})).catch(()=>{});log('EV','',null,'abort requested')}};
   $('#btnProbe').onclick=probe;$('#btnPC').onclick=powerCycled;$('#btnReport').onclick=()=>download('flash-report.json',S.report);
+  bindLab();
   $('#btnCopyLog').onclick=()=>copy(logText());$('#btnDlLog').onclick=()=>download('session.log',logText());
   $('#alAdd').onclick=()=>{const h=$('#alHash').value.trim().toLowerCase(),k=$('#alType').value;if(!/^[0-9a-f]{64}$/.test(h))return toast('SHA-256: 64 hex','warn');
     if(!S.allow[k].includes(h))S.allow[k].push(h);SV('allow',S.allow);$('#alHash').value='';renderAllow();render()};
