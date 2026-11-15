@@ -39,12 +39,14 @@ h2,h3{margin:0;font-weight:600}
 .kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:.2rem .8rem;margin:0}
 .kv dt{color:var(--mute);font-family:var(--mono);font-size:12px;padding-top:2px}.kv dd{margin:0;overflow-wrap:anywhere;font-family:var(--mono);font-size:12.5px}
 .kv__empty{grid-column:1/-1;color:var(--mute)}
-.f5-history{margin:0;padding:.5rem;border:1px solid var(--line);border-radius:6px}.f5-history figcaption{font-size:.85rem;color:var(--mute)}
-.f5-history svg{display:block;width:100%;height:auto;max-height:5rem}.f5-chart__line{fill:none;stroke:var(--cyan);stroke-width:2}
-.f5-chart__point{fill:var(--mag)}.f5-history p{margin:.25rem 0 0;color:var(--mute);font-size:11px}
+.memory-history{margin:0;padding:.5rem;border:1px solid var(--line);border-radius:6px}.memory-history figcaption{font-size:.85rem;color:var(--mute)}
+.memory-history svg{display:block;width:100%;height:auto;max-height:5rem}.memory-chart__line{fill:none;stroke:var(--cyan);stroke-width:2}
+.memory-chart__point{fill:var(--mag)}.memory-history p{margin:.25rem 0 0;color:var(--mute);font-size:11px}
 .fold summary{cursor:pointer;color:var(--info)}
 .pre{margin:.4rem 0 0;max-height:14rem;overflow:auto;background:var(--over);padding:.5rem;border-radius:6px;white-space:pre}
 .row{display:flex;flex-wrap:wrap;gap:.4rem}
+.product-firmware label{display:grid;gap:.2rem;flex:1 1 9rem;font-size:.8rem;color:var(--mute)}
+.product-firmware input{width:100%;min-width:0;font:inherit;color:var(--text);background:var(--over);border:1px solid var(--line);border-radius:5px;padding:.4rem}
 .drop{display:block;border:2px dashed var(--line);border-radius:10px;padding:1.4rem 1rem;text-align:center;color:var(--mute);cursor:pointer}
 .drop:hover,.drop--over{border-color:var(--cyan);color:var(--text)}
 .seg{border:1px solid var(--line);border-radius:6px;display:flex;flex-wrap:wrap;gap:.3rem 1rem;padding:.3rem .7rem .5rem}.seg legend{color:var(--mute);font-size:.85rem}
@@ -111,11 +113,18 @@ h2,h3{margin:0;font-weight:600}
   <section class="panel">
     <h2 class="panel__h"><span class="panel__n">1</span><span data-i18n="passport"></span></h2>
     <dl id="passKv" class="kv"></dl>
-    <figure id="f5HistoryFigure" class="f5-history" hidden>
-      <figcaption data-i18n="f5History"></figcaption>
-      <svg id="f5Chart" viewBox="0 0 360 72" role="img"></svg>
-      <p id="f5HistoryMeta" class="mono"></p>
+    <figure id="memoryHistoryFigure" class="memory-history" hidden>
+      <figcaption data-i18n="availableMemoryHistory"></figcaption>
+      <svg id="memoryChart" viewBox="0 0 360 72" role="img"></svg>
+      <p id="memoryHistoryMeta" class="mono"></p>
     </figure>
+    <div class="row product-firmware">
+      <label><span data-i18n="productFwName"></span><input id="productFwName" type="text" data-i18n-ph="productFwNamePh"></label>
+      <label><span data-i18n="productFwVersion"></span><input id="productFwVersion" type="text" data-i18n-ph="productFwVersionPh"></label>
+      <label><span data-i18n="productFwBuild"></span><input id="productFwBuild" type="text" data-i18n-ph="productFwBuildPh"></label>
+      <button id="btnSetProductFirmware" class="btn" data-i18n="setProductFw"></button>
+      <button id="btnClearProductFirmware" class="btn" data-i18n="clearProductFw"></button>
+    </div>
     <details class="fold"><summary data-i18n="gatt"></summary><pre id="gattPre" class="mono pre"></pre></details>
     <div class="row"><button id="btnRescan" class="btn" data-i18n="rescan"></button><button id="btnExpPass" class="btn">passport.json</button><button id="btnCopyPass" class="btn" data-i18n="copy"></button></div>
   </section>
@@ -545,7 +554,7 @@ const QIX_OPS={0x02:{n:'set_time',cls:'write'},0x16:{n:'display_ctrl',cls:'write
   0x22:{n:'steps (SDK stub)',cls:'read'},0x23:{n:'sleep (SDK stub)',cls:'read'},0x24:{n:'hr (SDK stub)',cls:'read'},0x25:{n:'pressure (stub)',cls:'read'},
   0x26:{n:'oxygen (stub)',cls:'read'},0x27:{n:'battery',cls:'read'},0x29:{n:'init/heartbeat',cls:'write'},0xC6:{n:'get_screen_info',cls:'read'},
   0xC7:{n:'screen_info (ответ)',cls:'read'},0xDC:{n:'ready',cls:'read'},0xFF:{n:'customer/ack',cls:'read'},
-  0xA0:{n:'Qix SET_TEST_MODE (BR35 only)',cls:'danger'},0xAA:{n:'Qix TEST_GET_FLASH (BR35 only)',cls:'danger'},0xA6:{n:'Qix TEST_CLOSE (BR35 only)',cls:'danger'}};
+  0xA0:{n:'SPORTS_DATA_INFO_GET (SDK)',cls:'read'},0xA6:{n:'SPORTS_DATA_SYNC (SDK)',cls:'write'}};
 // Health-заглушки: peripherals_support=0 → физических датчиков нет (ТЗ §5.1)
 const HEALTH_STUB=new Set([0x22,0x23,0x24,0x25,0x26]);
 const SMALL_FILE_TYPES=[{type:1,name:'contacts'},{type:2,name:'sports_record'},{type:3,name:'heart_rate'},{type:4,name:'blood_oxygen'},
@@ -558,13 +567,12 @@ const fromHex=s=>Uint8Array.from(s.replace(/[^0-9a-f]/gi,'').match(/../g)||[],h=
 const hx=n=>n==null?'—':'0x'+n.toString(16).toUpperCase();
 const eq=(a,b)=>!!a&&!!b&&a.length===b.length&&a.every((x,i)=>x===b[i]);
 
-const AC697X_PROFILE={match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},chip:'AC697N',family:'AC697x/BR30',sdk:'jl_sdk_ac697_publish',authProfile:'B',
-  transport:{rcsp:'AE00',sideband:'FD01-FD05',qixFd00:false},unsupported:['0xA0','0xAA','0xA6','qix-ota','ble-raw-dump'],fileTransfer:'0x00000007',peripherals:0,ota:false};
+const AC697X_PROFILE={match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','Q87','LED Badge']},chip:'AC697N',family:'AC697x/BR30',sdk:'jl_sdk_ac697_publish',authProfile:'B',
+  transport:{rcsp:'AE00',sideband:'FD01-FD05',qixFd00:false},unsupported:['qix-ota','ble-raw-dump'],fileTransfer:'0x00000007',peripherals:0,ota:false};
 const PROFILES={
   'e87-ac707n':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE'],chars:['fd01','fd02','fd03']},family:'AC707N/BR35',ota:true,chipkey:0x9847,
     flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},ubootSha256Allowlist:[],knownGoodImages:[],expectedForm:null,verifySpan:[0,0xFC000]},
   'e87-ac697x':AC697X_PROFILE,
-  'e87-ac697x-q87':{...AC697X_PROFILE,match:{...AC697X_PROFILE.match,names:['Q87']},mode:'receiver'},
   'e87-ac701n':{match:{sdkRegex:'jl_sdk_ac701',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC701N/BR28',ota:false}};
 const familyOf=s=>/ac707/.test(s||'')?'AC707N/BR35':/ac697/.test(s||'')?'AC697x/BR30':/ac701/.test(s||'')?'AC701N/BR28':'unknown';
 function matchProfile(P,profiles){
@@ -573,6 +581,10 @@ function matchProfile(P,profiles){
     if(P.sdkString&&new RegExp(m.sdkRegex).test(P.sdkString)&&m.gattServices.every(s=>P.gatt.services.some(u=>u.startsWith(s)||u.startsWith('0000'+s)))&&m.names.some(n=>name.startsWith(n))
       &&(m.chars||[]).every(c=>(P.charIds||[]).includes(c))&&!(m.charsAbsent||[]).some(c=>(P.charIds||[]).includes(c)))return id}
   return null}
+function deviceMode(P,profile){
+  const name=[P&&P.advertisedName,P&&P.name].filter(Boolean).join(' ');
+  if(/^47:89:/i.test(P&&P.mac||'')||/\bQ87\b/i.test(name))return'receiver';
+  return profile&&profile.mode||'standard'}
 // 9E-кадр: [0]=9E [1],[2]=? (меняются; seq/чексумма не подтверждены) [3]=cmd [4..5]=len LE [6..]=payload — сходится на всех TX/RX лога
 function parse9E(u){if(u[0]!==0x9E||u.length<6)return null;const len=u[4]|u[5]<<8;let s=0;for(let i=2;i<Math.min(u.length,6+len);i++)s+=u[i];
   return{chk:u[1],flags:u[2],cmd:u[3],len,payload:u.slice(6,6+len),complete:u.length>=6+len,ok:(s&255)===u[1]}}
@@ -609,37 +621,60 @@ function decodeTargetInfo(attrs){const o={};for(const{type,data}of attrs){const 
     type===10&&data.length>=4?`vid=${hx(data[0]<<8|data[1])} pid=${hx(data[2]<<8|data[3])}`:type===11?`${data.length} B (скрыт)`: // ключ устройства в паспорт не пишем
     type===13&&data.length>=4?Array.from(data.subarray(0,4)).join('.'):data.length===1?String(data[0]):txt||hex(data,'')}return o} // fw_version: трактовка 4 Б неоднозначна (qix-ble)
 const GENERIC4M={family:'unknown',flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000}};
-// C7 (ответ на C6), 13 B, u16 BE. 360×360 совпадает с панелью из ТЗ; назначение w2/h2 (368) и f5..f7 не подтверждено
-function decodeC7(p){if(!p||p.length<13)return null;const b=o=>p[o]<<8|p[o+1];return{width:b(0),height:b(2),w2:b(4),h2:b(6),f5:b(8),f6:p[10],f7:b(11)}}
-const F5_HISTORY_LIMIT=512;
-function f5HistoryKey(P){
+// C7 (ответ на C6): valid, четыре u16 LE размера, затем доступная память в KiB (u32 LE).
+function decodeC7(p){if(!p||p.length<13||p[0]!==1)return null;const u16=o=>p[o]|p[o+1]<<8,u32=o=>(p[o]|p[o+1]<<8|p[o+2]<<16|p[o+3]<<24)>>>0;
+  return{valid:true,width:u16(1),height:u16(3),pictureWidth:u16(5),pictureHeight:u16(7),availableMemoryKiB:u32(9)}}
+const MEMORY_HISTORY_LIMIT=512;
+function memoryHistoryKey(P){
   if(!P)return null;
   const device=P.mac||P.deviceId||P.advertisedName||P.name;
-  return device?`f5History.${encodeURIComponent(`${P.mode||'standard'}:${device}`)}`:null}
-function validF5History(value){
-  return Array.isArray(value)?value.filter(x=>x&&typeof x.ts==='string'&&Number.isFinite(x.value)).slice(-F5_HISTORY_LIMIT):[]}
-function saveF5History(key,history){
+  return device?`availableMemoryHistory.${encodeURIComponent(`${P.mode||'standard'}:${device}`)}`:null}
+function validMemoryHistory(value){
+  return Array.isArray(value)?value.filter(x=>x&&typeof x.ts==='string'&&Number.isFinite(x.value)&&x.value>=0).slice(-MEMORY_HISTORY_LIMIT):[]}
+function normalizeProductFirmware(value){
+  if(!value||typeof value.version!=='string'||!(/^\d+(?:\.\d+)+$/.test(value.version)))return null;
+  return{name:typeof value.name==='string'?value.name:null,version:value.version,build:typeof value.build==='string'?value.build:null,
+    source:'service-menu',capturedAt:typeof value.capturedAt==='string'?value.capturedAt:null}}
+function productFirmwareKey(deviceId){return deviceId?`bg.productFirmware.${encodeURIComponent(deviceId)}`:null}
+function loadProductFirmware(deviceId){
+  const key=productFirmwareKey(deviceId);if(!key)return null;
+  try{return normalizeProductFirmware(JSON.parse(localStorage.getItem(key)||'null'))}
+  catch(e){log('EV','',null,`ERROR loading product firmware: ${e.message}`);return null}}
+function saveProductFirmware(deviceId,value){
+  const key=productFirmwareKey(deviceId),productFirmware=normalizeProductFirmware(value);
+  if(!key||!productFirmware)throw new Error('valid device ID and dotted product version are required');
+  productFirmware.capturedAt=new Date().toISOString();
+  try{localStorage.setItem(key,JSON.stringify(productFirmware))}
+  catch(e){log('EV','',null,`ERROR saving product firmware: ${e.message}`);throw new Error(`could not save product firmware: ${e.message}`)}
+  return productFirmware}
+function clearProductFirmware(deviceId){
+  const key=productFirmwareKey(deviceId);if(!key)throw new Error('device ID is required');
+  try{localStorage.removeItem(key)}
+  catch(e){log('EV','',null,`ERROR clearing product firmware: ${e.message}`);throw new Error(`could not clear product firmware: ${e.message}`)}}
+function saveMemoryHistory(key,history){
   try{localStorage.setItem('bg.'+key,JSON.stringify(history))}
-  catch(e){log('EV','',null,`ERROR saving f5 history: ${e.message}`)}}
-function bindF5History(){
-  const key=f5HistoryKey(S.P);if(!key)return;
+  catch(e){log('EV','',null,`ERROR saving available-memory history: ${e.message}`)}}
+function bindMemoryHistory(){
+  const key=memoryHistoryKey(S.P);if(!key)return;
   let prior=[];
-  try{const raw=localStorage.getItem('bg.'+key);prior=raw==null?[]:validF5History(JSON.parse(raw))}
-  catch(e){log('EV','',null,`ERROR loading f5 history: ${e.message}`)}
-  const current=validF5History(S.P.f5History);
-  S.P.f5History=[...prior,...current].sort((a,b)=>a.ts.localeCompare(b.ts)).slice(-F5_HISTORY_LIMIT);
-  S.f5HistoryKey=key;saveF5History(key,S.P.f5History)}
+  try{const raw=localStorage.getItem('bg.'+key);prior=raw==null?[]:validMemoryHistory(JSON.parse(raw))}
+  catch(e){log('EV','',null,`ERROR loading available-memory history: ${e.message}`)}
+  const current=validMemoryHistory(S.P.availableMemoryHistory);
+  S.P.availableMemoryHistory=[...prior,...current].sort((a,b)=>a.ts.localeCompare(b.ts)).slice(-MEMORY_HISTORY_LIMIT);
+  S.availableMemoryHistoryKey=key;saveMemoryHistory(key,S.P.availableMemoryHistory)}
 function recordC7(payload){
   const display=decodeC7(payload);if(!display||!S.P)return display;
   S.P.display=display;
-  if(Number.isFinite(display.f5)){
-    const sample={ts:new Date().toISOString(),value:display.f5};
-    S.P.f5History=[...validF5History(S.P.f5History),sample].slice(-F5_HISTORY_LIMIT);
-    if(S.f5HistoryKey)saveF5History(S.f5HistoryKey,S.P.f5History)}
+  if(Number.isFinite(display.availableMemoryKiB)){
+    const sample={ts:new Date().toISOString(),value:display.availableMemoryKiB};
+    S.P.availableMemoryHistory=[...validMemoryHistory(S.P.availableMemoryHistory),sample].slice(-MEMORY_HISTORY_LIMIT);
+    if(S.availableMemoryHistoryKey)saveMemoryHistory(S.availableMemoryHistoryKey,S.P.availableMemoryHistory)}
   return display}
 const profileForSdk=(sdk,profiles)=>sdk?Object.keys(profiles).find(id=>new RegExp(profiles[id].match.sdkRegex).test(sdk))||null:null;
 // >0 upgrade, 0 same, <0 downgrade, null = unknown / different line
-function vcmp(a,b){if(!a||!b)return null;const x=a.split('.').map(Number),y=b.split('.').map(Number);if(x[0]!==y[0]||x[1]!==y[1])return null;
+function vcmp(a,b){if(typeof a!=='string'||typeof b!=='string'||!/^\d+(?:\.\d+)+$/.test(a)||!/^\d+(?:\.\d+)+$/.test(b))return null;
+  const x=a.split('.').map(Number),y=b.split('.').map(Number);
+  if(x.some(n=>!Number.isSafeInteger(n))||y.some(n=>!Number.isSafeInteger(n))||x[0]!==y[0]||x[1]!==y[1])return null;
   for(let i=2;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return Math.sign(d)}return 0}
 
 const RULE_TXT={
@@ -682,15 +717,17 @@ function evaluate(P,R,c){
   const dump=R.kind==='full-dump'||R.containsKeyMac,dc=c.dumpCert,dp=dc&&dc.passport,own=dump&&dp&&dp.deviceId===P.deviceId;
   add('R-DUMP',!dump?'pass':own&&dc&&dc.method==='wired-uboot'&&!qix?'warn':'block',dump?`cert.passport=${dp?dp.deviceId:'—'} method=${dc&&dc.method||'—'} path=${c.path}`:'no dump');
   add('R-DUMP-INTEG',!dump||dc&&dc.verified===true&&dc.sigOk===true&&dc.dumpSha256===R.sha256?'pass':'block',dump?(dc?`verified=${dc.verified} sig=${dc.sigOk} sha=${dc.dumpSha256===R.sha256}`:'no certificate'):'no dump');
-  const v=vcmp(R.version,P.fwVersion);
-  add('R-VER',v==null||v<0?'warn':'pass',`${P.fwVersion||'—'} → ${R.version||'—'}`);
+  const productVersion=P.productFirmware&&P.productFirmware.version,v=vcmp(R.version,productVersion);
+  add('R-VER',productVersion==null||v==null||v<0?'warn':'pass',
+    `product ${productVersion||'—'} → ${R.version||'—'}; BLE fwVersion ${P.fwVersion||'—'} not compared`);
   const kg=[...((pr&&pr.knownGoodImages)||[]).map(x=>x.sha256),...c.imageAllow];
   add('R-HASH',kg.includes(R.sha256)?'pass':'warn',(R.sha256||'').slice(0,16)+'…');
   add('R-PROBE',c.flags.probe?'block':'pass',`probe=${c.flags.probe}`);
   return{overall:rules.some(r=>r.severity==='block')?'BLOCK':rules.some(r=>r.severity==='warn')?'WARN':'ALLOW',rules}}
 
 function fixture(){
-  const P={deviceId:'dev',name:'EC-BADGE',chipFamily:'AC707N/BR35',sdkString:'jl_sdk_ac707_publish',fwVersion:'2.711.1.0.3',battery:{level:80,charging:false},capabilities:{qixFd00:true,rcspOta:true},profileId:'e87-ac707n',testModeSuspected:false,gatt:{services:[]}};
+  const P={deviceId:'dev',name:'EC-BADGE',chipFamily:'AC707N/BR35',sdkString:'jl_sdk_ac707_publish',fwVersion:'1.16.2.28',
+    productFirmware:{name:'example',version:'2.711.1.0.3',build:null},battery:{level:80,charging:false},capabilities:{qixFd00:true,rcspOta:true},profileId:'e87-ac707n',testModeSuspected:false,gatt:{services:[]}};
   const R={size:0x90000,sha256:'h',kind:'fw-custom',qixWrapped:true,chipkey:0x9847,targetProfileId:'e87-ac707n',ubootHash:'u',appBinSize:0x80000,crc:{hdr:true,list:true,data:true,qix:true},version:'2.711.1.0.4',geometry:{flashSize:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},containsKeyMac:false,internalJlCrcOk:true,slices:{onflash:'a',plain:'b'}};
   const c={path:'qix',lang:'ru',profiles:PROFILES,ubootAllow:['u'],imageAllow:['h'],maxImage:16<<20,qixReady:true,rcspReady:true,connected:true,phoneBtOff:true,flags:{testMode:false,dump:false,probe:false},dumpCert:null};
   return{P,R,c}}
@@ -703,7 +740,9 @@ function selfTest(){
   ok('CRC-16/XMODEM "123456789" = 0x31C3',crc16(new TextEncoder().encode('123456789'))===0x31C3);
   let f=fixture();ok('rules: reference → ALLOW',evaluate(f.P,f.R,f.c).overall==='ALLOW');
   const c7=parse9E(fromHex('9E 8D 00 C7 0D 00 01 68 01 68 01 70 01 70 01 F4 10 00 00')),d7=c7&&decodeC7(c7.payload);
-  ok('9E/C7 from E87 log: checksum ok, 360×360, 368×368',!!d7&&c7.ok&&c7.cmd===0xC7&&d7.width===360&&d7.h2===368&&d7.f5===500&&d7.f6===16);
+  ok('9E/C7: valid flag, LE dimensions, 4340 KiB available',!!d7&&c7.ok&&c7.cmd===0xC7&&d7.valid&&d7.width===360&&d7.height===360&&
+    d7.pictureWidth===368&&d7.pictureHeight===368&&d7.availableMemoryKiB===4340);
+  ok('C7: reject invalid screen-info response',decodeC7(Uint8Array.of(0,...c7.payload.subarray(1)))===null);
   const bp=parse9E(fromHex('9E 91 09 27 02 00 00 5F'));ok('9E/0x27 battery push from E87 log: 95%',bp.ok&&bp.cmd===0x27&&bp.payload[1]===95);
   ok('qixEncode: heartbeat = 9E B5 0B 29 01 00 80',hex(qixEncode(0x0B,0x29,[0x80]))==='9E B5 0B 29 01 00 80');
   ok('qixEncode: C6 = 9E D3 0B C6 01 00 01',hex(qixEncode(0x0B,0xC6,[1]))==='9E D3 0B C6 01 00 01');
@@ -736,13 +775,18 @@ function selfTest(){
   const mp=ids=>matchProfile({sdkString:'jl_sdk_ac707_publish',name:'E87',gatt:{services:['0000ae00-0000-1000-8000-00805f9b34fb','c2e6fd00-e966-1000-8000-bef9c223df6a']},charIds:ids},PROFILES);
   ok('profile: AC707N + FD01/FD02/FD03 → e87-ac707n',mp(['ae01','ae02','fd01','fd02','fd03','fd04','fd05'])==='e87-ac707n');
   ok('profile: without FD02 → none',mp(['ae01','ae02','fd01','fd03'])===null);
-  const q87=matchProfile({sdkString:'jl_sdk_ac697_publish',name:'Q87',gatt:{services:['ae00']},charIds:[]},PROFILES);
-  ok('profile: AC697x Q87 receiver alias is OTA-disabled',q87==='e87-ac697x-q87'&&PROFILES[q87].mode==='receiver'&&PROFILES[q87].ota===false);
-  ok('profile: Q87 advertisement survives different GATT name',matchProfile({sdkString:'jl_sdk_ac697_publish',name:'E87',advertisedName:'Q87',gatt:{services:['ae00']},charIds:[]},PROFILES)==='e87-ac697x-q87');
+  const q87Info={sdkString:'jl_sdk_ac697_publish',name:'Q87',mac:'47:89:00:02:09:dc',gatt:{services:['ae00']},charIds:[]};
+  const q87=matchProfile(q87Info,PROFILES);
+  ok('profile: AC697x E87/Q87 share one OTA-disabled profile',q87==='e87-ac697x'&&PROFILES[q87].ota===false&&deviceMode(q87Info,PROFILES[q87])==='receiver');
+  ok('profile: Q87 MAC identifies receiver mode with standard name',deviceMode({...q87Info,name:'E87',advertisedName:'E87'},PROFILES[q87])==='receiver');
+  ok('profile: E87 MAC identifies standard mode',deviceMode({...q87Info,name:'E87',mac:'46:88:00:02:09:dc'},PROFILES[q87])==='standard');
   const browseName=decodeBrowseEntries(Uint8Array.of(0x0A,0,0,0,2,0,0,12,0x96,0x65,0x10,0xC4,0x8B,0x23,0xEE,0xC2,0x2E,0xAF,0xDD,0xF6)).entries[0];
   ok('browse names: preserve raw bytes and alternate UTF-16LE candidate',browseName.nameHex==='966510C48B23EEC22EAFDDF6'&&browseName.nameEncoding==='byte-string'&&
     browseName.nameAlternateEncoding==='UTF-16LE'&&browseName.nameAlternate.length===6);
   const sevOf=(f,id)=>evaluate(f.P,f.R,f.c).rules.find(r=>r.id===id).severity;
+  f=fixture();f.P.fwVersion='999.0.0';ok('R-VER compares product firmware, not BLE SDK version',sevOf(f,'R-VER')==='pass');
+  f.P.productFirmware=null;f.P.fwVersion=f.R.version;ok('R-VER warns when product firmware is unknown',sevOf(f,'R-VER')==='warn');
+  ok('R-VER does not compare unlike or malformed version lines',vcmp('2.711.1.0.4','11.1.0.2')===null&&vcmp('11..0','11.1.0')===null);
   f=fixture();f.R.internalJlCrcOk=null;ok('R-CRC: internal JL CRC unknown → BLOCK',sevOf(f,'R-CRC')==='block');
   f=fixture();f.c.profiles={...PROFILES,'e87-ac707n':{...PROFILES['e87-ac707n'],expectedForm:'on-flash'}};f.R.slices.plain=null;
   ok('R-FORM: calibrated on-flash + flash.bin slice → pass',sevOf(f,'R-FORM')==='pass');
@@ -1038,7 +1082,12 @@ const JL={decrypt:null,parseHeader:null,verifyCrcs:null,layoutOk:null};
 /* ===== i18n ===== */
 const T={conn:['Подключить','Connect'],disc:['Отключить','Disconnect'],connAll:['Все устройства','All devices'],
   st_off:['нет связи','offline'],st_connecting:['подключение…','connecting…'],st_on:['на связи','connected'],
-  passport:['Паспорт устройства','Device passport'],f5History:['f5 — история сырых значений','f5 — raw value history'],image:['Образ и вердикт','Image & verdict'],flash:['Прошивка','Flashing'],settings:['Настройки','Settings'],
+  passport:['Паспорт устройства','Device passport'],availableMemoryHistory:['Доступная память (KiB)','Available memory (KiB)'],
+  productFwName:['Название','Name'],productFwVersion:['Версия','Version'],productFwBuild:['Сборка','Build'],
+  productFwNamePh:['Название, например E87_EN','Name, e.g. E87_EN'],productFwVersionPh:['Версия, например 11.1.0.2','Version, e.g. 11.1.0.2'],
+  productFwBuildPh:['Сборка, например 251229','Build, e.g. 251229'],setProductFw:['Сохранить версию продукта','Save product version'],
+  clearProductFw:['Очистить','Clear'],productFwSaved:['Версия продукта сохранена','Product version saved'],
+  productFwCleared:['Версия продукта очищена','Product version cleared'],image:['Образ и вердикт','Image & verdict'],flash:['Прошивка','Flashing'],settings:['Настройки','Settings'],
   rescan:['Перечитать','Re-read'],copy:['Копировать','Copy'],gatt:['GATT-карта','GATT map'],
   drop:['Перетащите .ufw / .bin или нажмите (≤ 16 МБ). Файл не покидает устройство.','Drop .ufw / .bin or click (≤ 16 MB). The file never leaves this device.'],
   dumpPass:['Паспорт дампа (.json) для restore:','Dump passport (.json) for restore:'],path:['Путь OTA','OTA path'],
@@ -1111,16 +1160,16 @@ function loadProfiles(){
   for(const[id,base]of Object.entries(PROFILES)){
     const old=saved[id];if(!old)continue;
     const oldNames=Array.isArray(old.match&&old.match.names)?old.match.names.filter(name=>typeof name==='string'):[];
-    const retainedNames=id==='e87-ac697x'?oldNames.filter(name=>!/^Q87/i.test(name)):oldNames;
-    const names=[...(base.match.names||[]),...retainedNames];
+    const names=[...(base.match.names||[]),...oldNames];
     out[id]={...base,...old,match:{...base.match,...(old.match||{}),names:[...new Set(names)]}};
     if(Object.hasOwn(base,'ota'))out[id].ota=base.ota;
     if(Object.hasOwn(base,'mode'))out[id].mode=base.mode}
+  delete out['e87-ac697x-q87'];
   return out}
 const S={set:{...DEF,...LS('set',{})},allow:LS('allow',{uboot:[],image:[]}),flags:LS('flags',{testMode:false,dump:false,probe:false}),profiles:loadProfiles(),
   dev:null,chars:{},gatt:null,gattReady:false,conn:'off',P:null,R:null,buf:null,dumpPass:null,V:null,path:'qix',phase:'idle',log:[],waiters:[],ac:null,wake:null,
-  prog:{done:0,total:0,t0:0,start:0,win:0},abort:false,locked:false,userDisc:false,reconnecting:false,report:null,dumpCert:null,dumpBuf:null,img:null,l0:null,int:null,asyncTests:null,chunkCrc:{ok:0,fail:0},boot:false,quiet:false,battAt:0,maxNotify:{},
-  rawLog:[],scan:[],capMatrix:null,smallFiles:[],smallFilesContextKey:null,res:[],resManifest:null,f5HistoryKey:null,health:null,otaProbe:null};
+  prog:{done:0,total:0,t0:0,start:0,win:0},abort:false,locked:false,userDisc:false,reconnecting:false,report:null,dumpCert:null,dumpBuf:null,img:null,l0:null,int:null,asyncTests:null,chunkCrc:{ok:0,fail:0},boot:false,battAt:0,maxNotify:{},
+  rawLog:[],scan:[],capMatrix:null,smallFiles:[],smallFilesContextKey:null,res:[],resManifest:null,availableMemoryHistoryKey:null,health:null,otaProbe:null};
 const ACTIVE=['preflight','armed','transferring','paused','resuming','applying','rebooting','verifying-marker','verifying-hash','verifying-readback','dumping'];
 const ABORTABLE=['preflight','armed','transferring','paused','resuming','dumping','verifying-readback'];
 
@@ -1148,7 +1197,7 @@ const idbPut=(s,k,v)=>idbDo(s,'readwrite',st=>st.put(v,k));
 function chime(){if(!S.set.chime)return;try{const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=880;g.gain.value=.04;o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.15);o.onended=()=>a.close()}catch{}}
 
 /* ===== log ===== */
-function log(dir,ch,u8,note=''){if(S.quiet&&dir!=='EV'&&/0xAA|test_get_flash/.test(note))return;const e={ts:new Date().toISOString(),dir,ch,hex:u8?hex(u8):'',note};S.log.push(e);
+function log(dir,ch,u8,note=''){const e={ts:new Date().toISOString(),dir,ch,hex:u8?hex(u8):'',note};S.log.push(e);
   if(S.log.length>50000)S.log.splice(0,10000); // shortcut: кольцевой буфер; полный лог сессии — в IndexedDB по завершении прошивки
   appendLog(e)}
 function appendLog(e){if(!S.set.expert&&e.dir!=='EV'&&!e.note)return;const li=document.createElement('li');li.className=e.dir.toLowerCase();
@@ -1156,7 +1205,8 @@ function appendLog(e){if(!S.set.expert&&e.dir!=='EV'&&!e.note)return;const li=do
   const L=$('#log');L.append(li);while(L.childElementCount>400)L.firstChild.remove();L.scrollTop=L.scrollHeight}
 const rebuildLog=()=>{$('#log').textContent='';S.log.slice(-1500).forEach(appendLog)};
 const logText=()=>S.log.map(e=>`${e.ts} ${e.dir} ${e.ch} ${e.hex} ${e.note}`).join('\n');
-const QCMD={0x21:'sync_state',0x22:'steps',0x23:'sleep',0x24:'hr',0x25:'pressure',0x26:'oxygen',0x27:'battery',0xC7:'screen_info',0xFF:'ack',0xA0:'test_mode',0xAA:'test_get_flash'}; // qix-ble health_dump/opcodes
+const QCMD={0x21:'sync_state',0x22:'steps',0x23:'sleep',0x24:'hr',0x25:'pressure',0x26:'oxygen',0x27:'battery',0xC7:'screen_info',0xFF:'ack',
+  0xA0:'SPORTS_DATA_INFO_GET (SDK)',0xA6:'SPORTS_DATA_SYNC (SDK)'}; // JieLi SDK names; historical ACK-only probes are not flash reads
 function decode(k,u){if(u[0]===0xFE&&u[1]===0xDC&&u[2]===0xBA){const r=parseRcspResp(u);return`FE flag=${hx(u[3])} cmd=${hx(u[4])} len=${u[5]<<8|u[6]}${r&&u[3]===0?' status='+r.status:''}`}
   const f=parse9E(u);if(f){const c=f.cmd===0xC7?decodeC7(f.payload):null,a=ascii(f.payload).trim();
     return`9E cmd=${hx(f.cmd)}${QCMD[f.cmd]?' '+QCMD[f.cmd]:''} len=${f.len}${f.ok?'':' !chk'}${c?' '+JSON.stringify(c):f.cmd===0x27&&f.len===2?` battery ${f.payload[1]}% mode=${f.payload[0]}`:a.length>=4?' "'+a.replace(/\n/g,' ')+'"':''}`}
@@ -1167,7 +1217,7 @@ function decode(k,u){if(u[0]===0xFE&&u[1]===0xDC&&u[2]===0xBA){const r=parseRcsp
  * GATT E87 сверен с qix-ble service.py: сервис C2E6FD00 = Qix-sideband (TX FD02, RX FD01/FD03) — характеристика FD00 не обнаружена на E87;
  * AE00 = RCSP (TX AE01, RX AE02). FD05 не подписываем: по qix-ble это ломает REQ_UPDATE (silent reject). 2A19 на этой прошивке пустой. */
 const NAMES=['E87','E92','L8','X9','Q87','LED Badge','EC-BADGE'];
-const SVC={ae00:'0000ae00-0000-1000-8000-00805f9b34fb',fd:'c2e6fd00-e966-1000-8000-bef9c223df6a'};
+const SVC={ae00:'0000ae00-0000-1000-8000-00805f9b34fb',fd:'c2e6fd00-e966-1000-8000-bef9c223df6a',advertisedFd00:0xFD00};
 const OPT=[SVC.ae00,SVC.fd,'battery_service','generic_access'];
 const NOTIFY=['ae02','fd01','fd03'];
 const fe=(flag,cmd,body=[])=>Uint8Array.of(0xFE,0xDC,0xBA,flag,cmd,body.length>>8,body.length&255,...body,0xEF);
@@ -1224,11 +1274,14 @@ function sniff(u){if(!S.P)return;const s=ascii(u),sdk=s.match(/jl_sdk_ac\w+/),ve
 async function connect(all){
   if(!navigator.bluetooth)return toast('E-BLE-001','block');
   if(S.dev&&S.dev.gatt.connected)return toast(t('oneConn'),'warn');
-  let d;try{d=await navigator.bluetooth.requestDevice(all?{acceptAllDevices:true,optionalServices:OPT}:{filters:[...NAMES.map(namePrefix=>({namePrefix})),{services:[SVC.ae00]}],optionalServices:OPT})}
+  let d;try{d=await navigator.bluetooth.requestDevice(all?{acceptAllDevices:true,optionalServices:OPT}:{filters:[
+    ...NAMES.map(namePrefix=>({namePrefix})),{services:[SVC.ae00]},{services:[SVC.advertisedFd00]},
+    {manufacturerData:[{companyIdentifier:0x6DB3}]}],optionalServices:OPT})}
   catch(e){return toast('E-BLE-002: '+e.message,'warn')}
   if(S.ac)S.ac.abort();S.ac=new AbortController();S.dev=d;S.userDisc=false;
   d.addEventListener('gattserverdisconnected',onDisc,{signal:S.ac.signal});
-  try{await gattUp();await collectMeta()}catch(e){log('EV','',null,'E-BLE-003 '+e.message);toast('E-BLE-003: '+e.message,'block');setConn(d.gatt.connected?'on':'off')}}
+  try{await gattUp();await collectMeta()}catch(e){log('EV','',null,'E-BLE-003 '+e.message);toast(e.code==='E-AUTH-002'?e.message:'E-BLE-003: '+e.message,'block');
+    if(e.code==='E-AUTH-002'){S.userDisc=true;if(d.gatt.connected)d.gatt.disconnect();setConn('off')}else setConn(d.gatt.connected?'on':'off')}}
 
 async function gattUp(){
   setConn('connecting');
@@ -1238,7 +1291,7 @@ async function gattUp(){
     const cs=await gq(()=>s.getCharacteristics()).catch(()=>[]);
     g.chars[s.uuid]=cs.map(c=>`${c.uuid} [${['read','write','writeWithoutResponse','notify','indicate'].filter(p=>c.properties[p]).join(',')}]`);
     for(const c of cs)chars[short(c.uuid)]??=c}
-  S.chars=chars;S.gatt=g;S.dumpCs=0;for(const k in rxBuf)delete rxBuf[k];S.boot=false;
+  S.chars=chars;S.gatt=g;for(const k in rxBuf)delete rxBuf[k];S.boot=false;
   for(const k of NOTIFY){const c=chars[k];if(!c||!(c.properties.notify||c.properties.indicate))continue;
     try{await gq(()=>c.startNotifications());c.addEventListener('characteristicvaluechanged',onRx,{signal:S.ac.signal})}catch(e){log('EV',k,null,'notify ✕ '+e.message)}}
   S.gattReady=true;log('EV','',null,`GATT ↑ ${g.services.length} services`);setConn('on')}
@@ -1388,18 +1441,20 @@ async function bootstrapFull(ms){const r={},rc=c=>ackOk(waitFor((k,u)=>k==='ae02
   return r}
 async function collectMeta(){
   const t0=Date.now(),left=()=>Math.max(300,Math.min(S.set.reqTo,12000-(Date.now()-t0)));
-  S.boot=false;S.f5HistoryKey=null;
+  S.boot=false;S.availableMemoryHistoryKey=null;
   S.P={deviceId:S.dev.id,name:S.dev.name||null,advertisedName:S.dev.name||null,chipFamily:'unknown',sdkString:null,fwVersion:null,productName:null,battery:{level:null,charging:null,mode:null},gatt:S.gatt,
     capabilities:{qixFd00:!!S.chars.fd00,rcspOta:false,rcspOtaProbe:false,rcspOtaObserved:false,
       rcspTransport:!!(S.chars.ae01&&S.chars.ae02),batteryService:!!S.chars['2a19']},auth:{ok:false,keyProfile:null},
     testModeSuspected:!!S.flags.testMode,profileId:null,capturedAt:null,bootMarker:false,display:null,mac:null,targetInfo:null,sysInfo:null,decoded:null,
-    f5History:[],unsupported:[],transport:{rcsp:!!(S.chars.ae01&&S.chars.ae02),sideband:!!(S.chars.fd01&&S.chars.fd02&&S.chars.fd03),qixFd00:!!S.chars.fd00},
+    availableMemoryHistory:[],productFirmware:loadProductFirmware(S.dev.id),unsupported:[],transport:{rcsp:!!(S.chars.ae01&&S.chars.ae02),sideband:!!(S.chars.fd01&&S.chars.fd02&&S.chars.fd03),qixFd00:!!S.chars.fd00},
     variant:null,charIds:Object.keys(S.chars).sort()};
   render();
   const step=async(n,f,force)=>{if(!force&&Date.now()-t0>12000)return log('EV','',null,n+': skipped (budget)');try{await f()}catch(e){log('EV','',null,`${n}: ${e.message}`)}};
   await step('name',async()=>{if(S.chars['2a00'])S.P.name=new TextDecoder().decode(await gq(()=>S.chars['2a00'].readValue()))||S.P.name});
   await step('passive',()=>sleep(Math.min(600,left())));
-  await step('auth',async()=>{S.P.auth=await authHandshake(left())});
+  try{S.P.auth=await authHandshake(left())}
+  catch(e){log('EV','',null,`auth handshake failed; closing GATT: ${e.message}`);disconnect();
+    const err=new Error(`E-AUTH-002 handshake failed; connection closed: ${e.message}`);err.code='E-AUTH-002';throw err}
   if(S.P.auth.ok){
     await step('bootstrap',async()=>{const r=await bootstrapFull(Math.min(1500,left()));S.boot=true;log('EV','',null,'bootstrap '+JSON.stringify(r))})}
   else{if(S.set.rcspPreAuth){
@@ -1412,8 +1467,8 @@ async function collectMeta(){
   S.P.chipFamily=familyOf(S.P.sdkString);S.P.profileId=matchProfile(S.P,S.profiles);
   S.P.variant=S.P.capabilities.qixFd00?'Qix characteristic + RCSP AE00':S.P.transport.sideband?'FD01–FD05 sideband + RCSP AE00':'RCSP AE00 only';
   const profile=S.P.profileId&&S.profiles[S.P.profileId];
-  const receiverMode=!!(profile&&profile.mode==='receiver')||/^Q87/i.test(S.dev&&S.dev.name||S.P.name||'');
-  S.P.mode=receiverMode?'receiver':profile&&profile.mode||'standard';
+  S.P.mode=deviceMode(S.P,profile);
+  const receiverMode=S.P.mode==='receiver';
   S.P.capabilities.rcspOta=!!(S.P.capabilities.rcspOtaObserved&&!receiverMode);
   S.P.unsupported=profile&&profile.unsupported?profile.unsupported.slice():[];
   S.P.fileTransfer=S.P.decoded&&S.P.decoded.targetInfo&&S.P.decoded.targetInfo.fields.fileTransfer?
@@ -1421,7 +1476,7 @@ async function collectMeta(){
   S.P.authProfile=S.P.auth.keyProfile;
   S.P.transport={...S.P.transport,...(profile&&profile.transport||{})};
   if(profile){S.P.chip=profile.chip||null;S.P.family=profile.family||S.P.chipFamily;S.P.sdk=profile.sdk||S.P.sdkString}
-  S.P.maxNotify={...S.maxNotify};S.P.capturedAt=new Date().toISOString();bindF5History();
+  S.P.maxNotify={...S.maxNotify};S.P.capturedAt=new Date().toISOString();bindMemoryHistory();
   log('EV','',null,`passport ${Date.now()-t0} ms, auth=${S.P.auth.ok} boot=${S.boot} profile=${S.P.profileId}`);idb('passports',S.P);toast(t('meta'),S.P.profileId?'ok':'warn');render()}
 
 /* ---- src/protocol/probe.js ---- */
@@ -1457,9 +1512,9 @@ const EVIDENCE_SEED=[
   {op:0x24,transport:'FD01',kind:'sideband-data',len:7,status:null,verdict:'stub',note:'hr: заглушка watch-SDK',src:'log'},
   {op:0xE5,transport:'AE01',kind:'fe-push',len:6,status:null,verdict:'observed-request',dataHex:'00 00 00 00 00 08',
     note:'OTA pull request captured; request alone does not validate the image or arm transfer',src:'user-capture'},
-  {op:0xA0,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'A0 00',note:'Qix SET_TEST_MODE: только транспортный ACK, 8 проб без данных',src:'log'},
-  {op:0xAA,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'AA 00',note:'TEST_GET_FLASH 256/128/64/16 Б × 2 сеанса — данных нет',src:'log'},
-  {op:0xA6,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'A6 00',note:'TEST_CLOSE: только ACK; после него нужен power-cycle',src:'log'}];
+  {op:0xA0,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'ack-only',dataHex:'A0 00',note:'Historical probe only; SDK names this SPORTS_DATA_INFO_GET, not a flash command',src:'log'},
+  {op:0xAA,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'ack-only',dataHex:'AA 00',note:'Historical ACK-only probe; semantics unverified and not a flash-read command',src:'log'},
+  {op:0xA6,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'ack-only',dataHex:'A6 00',note:'Historical probe only; SDK names this SPORTS_DATA_SYNC, not a flash command',src:'log'}];
 
 /* Raw Probe accepts only the bounded read-only request allowlist. */
 async function rawProbe({transport='ae01',hexBytes='',ms=null,note='raw probe'}={}){
@@ -1521,18 +1576,21 @@ function buildCapabilityMatrix(){
   for(const s of PROBE.scan.filter(x=>!x.skipped))push({op:s.op,opHex:s.opHex,name:s.name,transport:s.transport==='fd02'?'FD02':'AE01',
     kind:s.kind,status:s.status,len:s.len,dataHex:s.dataHex,verdict:s.verdict,confidence:s.confidence,source:'scan',
     sdk:(opInfo(s.op)||{}).sdk_name||null,note:(opInfo(s.op)||{}).semantics||null});
-  for(const e of EVIDENCE_SEED)if(!seen.has(e.transport+':'+e.op))push({op:e.op,opHex:hx(e.op),name:opName(e.op),transport:e.transport,kind:e.kind,
+  for(const e of EVIDENCE_SEED)if(!seen.has(e.transport+':'+e.op)){
+    const sideband=e.transport.startsWith('FD'),info=opInfo(e.op);
+    push({op:e.op,opHex:hx(e.op),name:sideband?(QIX_OPS[e.op]||{}).n||opName(e.op):opName(e.op),transport:e.transport,kind:e.kind,
     status:e.status,len:e.len,dataHex:e.dataHex||'',verdict:e.verdict,confidence:'field-log',source:'field-capture',note:e.note,
-    sdk:(opInfo(e.op)||{}).sdk_name||null});
+    sdk:sideband?null:info&&info.sdk_name||null})}
   const P=S.P;
   return{artifact:'capability-matrix.json',generatedAt:new Date().toISOString(),
-    device:P?{deviceId:P.deviceId,name:P.name,chipFamily:P.chipFamily,sdkString:P.sdkString,fwVersion:P.fwVersion,profileId:P.profileId,
+    device:P?{deviceId:P.deviceId,name:P.name,mode:P.mode,chipFamily:P.chipFamily,sdkString:P.sdkString,fwVersion:P.fwVersion,
+      productFirmware:P.productFirmware||null,profileId:P.profileId,
       uboot:P.decoded&&P.decoded.targetInfo?P.decoded.targetInfo.fields.ubootVersion:null}:null,
     rules:{success:'matching fe-response or relevant sideband-data; fe-push and generic-ack are not success',
       notSuccess:'generic-ack (9E … FF 02 00 echo status) — только приём байтов',
       scanPayload:'per-opcode read-only request bodies; unknown/write opcodes are skipped',
       skipped:'all commands outside the read-only allowlist'},
-    unsupported:(P&&P.unsupported)||['0xA0','0xAA','0xA6','qix-ota','ble-raw-dump'],
+    unsupported:(P&&P.unsupported)||['qix-ota','ble-raw-dump'],
     count:rows.length,rows:rows.sort((a,b)=>a.op-b.op)}}
 const exportMatrix=()=>download('capability-matrix.json',S.capMatrix||buildCapabilityMatrix());
 
@@ -2099,6 +2157,16 @@ async function fitFrames(frames,{budget=MAX_UPLOAD_BYTES,width,height,fps}={}){
 const CONTENT={running:false,mode:'image',payload:null,info:null,progress:0,result:null,error:null,chunkSize:490,windows:0};
 const crc16be=n=>[(n>>8)&255,n&255];
 const tmpName=()=>Math.floor(Math.random()*0xFFFFFF).toString(16).padStart(6,'0')+'.tmp';
+function contentMemoryPreflight(sizeBytes,availableMemoryKiB){
+  if(!Number.isSafeInteger(sizeBytes)||sizeBytes<0)throw new Error('E-CNT-004 invalid upload size');
+  if(!Number.isFinite(availableMemoryKiB)||availableMemoryKiB<0)throw new Error('E-CNT-004 available memory is unknown');
+  const requiredMemoryKiB=Math.ceil(sizeBytes*1.2/1024);
+  if(requiredMemoryKiB>availableMemoryKiB)
+    throw new Error(`E-CNT-004 insufficient memory: need ${requiredMemoryKiB} KiB including 20% reserve, available ${availableMemoryKiB} KiB`);
+  return{requiredMemoryKiB,availableMemoryKiB}}
+function assertContentStatus(status){
+  if(status!==0)throw new Error(`E-CNT-003 device final status ${hx(status)} (${statusName(status)})`);
+  return true}
 // Ответ на 0x20: путь в UTF-16LE с префиксом U+555C, как в официальном приложении
 function filePathResponse(sn,mode){
   const d=new Date(),p=n=>String(n).padStart(2,'0');
@@ -2124,10 +2192,15 @@ async function contentUpload(payload,mode='image',{onProgress=null}={}){
   if(payload.length>MAX_UPLOAD_BYTES)log('EV','',null,`внимание: ${payload.length} Б > бюджета ${MAX_UPLOAD_BYTES} Б — устройство может отказаться`);
   CONTENT.running=true;CONTENT.mode=mode;CONTENT.error=null;CONTENT.result=null;CONTENT.windows=0;S.abort=false;
   S.prog={done:0,total:payload.length,t0:performance.now(),start:0,win:0};
-  const wl=await wakeHold();const Q=contentQueue();
+  const wl=await wakeHold();let Q=null;
   const total=payload.length,fileCrc=crc16(payload);
   try{
     setPhase('preflight');
+    const screen=await readScreen();
+    if(!screen)throw new Error('E-CNT-004 could not read current available memory');
+    const memory=contentMemoryPreflight(total,screen.availableMemoryKiB);
+    log('EV','',null,`content preflight: ${memory.requiredMemoryKiB}/${memory.availableMemoryKiB} KiB including 20% reserve`);
+    if(S.abort)throw new Error('E-ABORT');
     // Фаза 6: session open
     const s21=await rcspCmd(0x21,[0x00],8000,{note:'content 0x21 session-open'});
     if(s21.kind!=='fe-response')throw new Error('E-CNT-001 0x21: '+kindTxt(s21.kind));
@@ -2139,6 +2212,7 @@ async function contentUpload(payload,mode='image',{onProgress=null}={}){
     const nm=new TextEncoder().encode(tmpName());
     const meta=Uint8Array.of((total>>>24)&255,(total>>>16)&255,(total>>>8)&255,total&255,...crc16be(fileCrc),
       Math.floor(Math.random()*256),Math.floor(Math.random()*256),...nm,0);
+    Q=contentQueue();
     const s1b=await rcspCmd(0x1B,meta,8000,{note:`content 0x1B metadata ${total} B crc=${hx(fileCrc)}`});
     if(s1b.kind!=='fe-response')throw new Error('E-CNT-001 0x1B: '+kindTxt(s1b.kind));
     if(s1b.status!==0)throw new Error('E-CNT-001 0x1B status '+statusName(s1b.status));
@@ -2149,7 +2223,7 @@ async function contentUpload(payload,mode='image',{onProgress=null}={}){
     // Фаза 9: оконная передача, устройство задаёт offset и размер окна
     let ev=await Q.next(10000);
     if(!ev)throw new Error('E-CNT-002 нет первого окна 0x1D за 10 с');
-    let seq=nextSN(),sent=0;
+    let seq=nextSN(),maxOffsetDelivered=0;
     for(;;){
       if(S.abort)throw new Error('E-ABORT');
       if(ev.cmd===0x1D){
@@ -2158,14 +2232,17 @@ async function contentUpload(payload,mode='image',{onProgress=null}={}){
         const st=p[0],win=be16(p,1),next=be32(p,3);
         CONTENT.windows++;
         if(st!==0)log('EV','',null,`окно: status=${hx(st)} (${statusName(st)})`);
-        if(win===0&&next>=total){log('EV','',null,'окно: передача завершена устройством');break}
+        if(win===0&&next>=total){
+          if(maxOffsetDelivered<total)throw new Error(`E-CNT-002 device closed window before all bytes were sent (${maxOffsetDelivered}/${total})`);
+          log('EV','',null,'окно: передача завершена устройством');
+          ev=await Q.next(10000);if(!ev)throw new Error('E-CNT-003 no FILE_COMPLETE after final window');continue}
         let off=next,slot=0,inWin=0;
         while(inWin<win&&off<total){
           const len=Math.min(cs,total-off,win-inWin),data=payload.subarray(off,off+len),c=crc16(data);
           await rcspWrite(fe(FE_FLAG.push,0x01,Uint8Array.of(seq&255,0x1D,slot&255,...crc16be(c),...data)),`content data @${hx(off)} +${len}`);
-          seq=(seq+1)&255;slot=(slot+1)&7;off+=len;inWin+=len;sent=off;
-          S.prog.done=off;CONTENT.progress=off/total;tick();
-          if(onProgress)onProgress(off,total);
+          seq=(seq+1)&255;slot=(slot+1)&7;off+=len;inWin+=len;maxOffsetDelivered=Math.max(maxOffsetDelivered,off);
+          S.prog.done=maxOffsetDelivered;CONTENT.progress=maxOffsetDelivered/total;tick();
+          if(onProgress)onProgress(maxOffsetDelivered,total);
           if(S.set.chunkDelay)await sleep(S.set.chunkDelay)}
         S.prog.win=CONTENT.windows;renderLab();
         ev=await Q.next(15000);
@@ -2173,23 +2250,24 @@ async function contentUpload(payload,mode='image',{onProgress=null}={}){
           else throw new Error(`E-CNT-002 таймаут окна на ${off}/${total}`)}
         continue}
       if(ev.cmd===0x20){ // FILE_COMPLETE — устройству нужен путь, таймаут у него жёсткий (~100 мс)
+        if(maxOffsetDelivered<total)throw new Error(`E-CNT-002 device completed before all bytes were sent (${maxOffsetDelivered}/${total})`);
         await rcspAck(0x20,ev.sn,0,filePathResponse(ev.sn,mode),null,'content 0x20 file-path');
         const fin=await Q.next(10000);
         if(fin&&fin.cmd===0x1C){const st=(fin.payload&&fin.payload.length)?fin.payload[0]:0xFF;
           await rcspAck(0x1C,fin.sn,0,[],null,'content 0x1C ack');
-          CONTENT.result=st;break}
-        CONTENT.result=0;break}
+          CONTENT.result=st;assertContentStatus(st);break}
+        throw new Error('E-CNT-003 missing final 0x1C status after 0x20')}
       if(ev.cmd===0x1C){const st=(ev.payload&&ev.payload.length)?ev.payload[0]:0xFF;
-        await rcspAck(0x1C,ev.sn,0,[],null,'content 0x1C ack');CONTENT.result=st;break}
+        await rcspAck(0x1C,ev.sn,0,[],null,'content 0x1C ack');CONTENT.result=st;assertContentStatus(st);break}
       ev=await Q.next(10000);if(!ev)throw new Error('E-CNT-002 таймаут ожидания завершения')}
     setPhase('done');
     const ok=CONTENT.result===0;
-    log('EV','',null,`content ${mode}: ${sent}/${total} Б, окон ${CONTENT.windows}, статус ${hx(CONTENT.result)}`);
+    log('EV','',null,`content ${mode}: ${maxOffsetDelivered}/${total} Б, окон ${CONTENT.windows}, статус ${hx(CONTENT.result)}`);
     toast(ok?'Контент отправлен ✓':'Устройство вернуло статус '+hx(CONTENT.result),ok?'ok':'block');
     if(ok)chime();
-    return{ok,bytes:sent,total,windows:CONTENT.windows,status:CONTENT.result,chunkSize:cs,crc16:fileCrc}}
+    return{ok,bytes:maxOffsetDelivered,total,windows:CONTENT.windows,status:CONTENT.result,chunkSize:cs,crc16:fileCrc}}
   catch(e){CONTENT.error=e.message;setPhase('error');log('EV','',null,'content ✕ '+e.message);toast(e.message,'block');throw e}
-  finally{CONTENT.running=false;Q.un();if(wl)wl.release().catch(()=>{});renderLab()}}
+  finally{CONTENT.running=false;if(Q)Q.un();if(wl)wl.release().catch(()=>{});renderLab()}}
 
 /* ---------- Прочие рабочие фичи (Фаза 5) ---------- */
 // Время: 9E 0x02, год LE (проверено на железе)
@@ -2457,9 +2535,9 @@ function ring(){const p=S.prog,f=p.total?p.done/p.total:0,el=(performance.now()-
   $('#ringArc').style.strokeDashoffset=String(1024.2*(1-f));$('#ringPct').textContent=Math.floor(f*100)+'%';$('#ringPhase').textContent=S.phase;
   $('#ring').setAttribute('aria-valuenow',Math.floor(f*100));$('#ring').classList.toggle('ring--live',S.phase==='transferring');
   $('#ringSub').textContent=p.total?`${sp.toFixed(2)} KB/s  ETA ${sp>0?Math.ceil((p.total-p.done)/1024/sp)+' s':'—'}\nwin ${p.win}  chunk ${Math.ceil(p.done/S.set.chunk)}/${Math.ceil(p.total/S.set.chunk)}`:''}
-function renderF5History(P){
-  const figure=$('#f5HistoryFigure'),svg=$('#f5Chart'),meta=$('#f5HistoryMeta');
-  const history=(P&&Array.isArray(P.f5History)?P.f5History:[]).filter(x=>x&&Number.isFinite(x.value));
+function renderAvailableMemoryHistory(P){
+  const figure=$('#memoryHistoryFigure'),svg=$('#memoryChart'),meta=$('#memoryHistoryMeta');
+  const history=(P&&Array.isArray(P.availableMemoryHistory)?P.availableMemoryHistory:[]).filter(x=>x&&Number.isFinite(x.value));
   figure.hidden=!history.length;svg.replaceChildren();
   if(!history.length){meta.textContent='';return}
   const ns='http://www.w3.org/2000/svg',w=360,h=72,pad=8,values=history.map(x=>x.value),lo=Math.min(...values),hi=Math.max(...values);
@@ -2467,24 +2545,28 @@ function renderF5History(P){
     const px=pad+(w-pad*2)*(history.length===1?0.5:i/(history.length-1));
     const py=pad+(h-pad*2)*(hi===lo?0.5:(hi-x.value)/(hi-lo));
     return`${px},${py}`});
-  svg.setAttribute('aria-label',`${t('f5History')}: ${history.length}`);
-  if(points.length>1){const line=document.createElementNS(ns,'polyline');line.setAttribute('points',points.join(' '));line.setAttribute('class','f5-chart__line');svg.append(line)}
+  svg.setAttribute('aria-label',`${t('availableMemoryHistory')}: ${history.length}`);
+  if(points.length>1){const line=document.createElementNS(ns,'polyline');line.setAttribute('points',points.join(' '));line.setAttribute('class','memory-chart__line');svg.append(line)}
   const last=points[points.length-1].split(',');
-  const point=document.createElementNS(ns,'circle');point.setAttribute('cx',last[0]);point.setAttribute('cy',last[1]);point.setAttribute('r','3');point.setAttribute('class','f5-chart__point');svg.append(point);
-  meta.textContent=`${history.length} · ${history[0].ts} — ${history[history.length-1].ts} · latest ${history[history.length-1].value}`}
+  const point=document.createElementNS(ns,'circle');point.setAttribute('cx',last[0]);point.setAttribute('cy',last[1]);point.setAttribute('r','3');point.setAttribute('class','memory-chart__point');svg.append(point);
+  meta.textContent=`${history.length} · ${history[0].ts} — ${history[history.length-1].ts} · latest ${history[history.length-1].value} KiB`}
 function render(){
   const on=S.conn==='on',P=S.P,R=S.R,act=ACTIVE.includes(S.phase);
+  const productFirmware=P&&P.productFirmware||{};
+  for(const[id,value]of[['productFwName',productFirmware.name],['productFwVersion',productFirmware.version],['productFwBuild',productFirmware.build]]){
+    const el=$('#'+id);if(document.activeElement!==el)el.value=value||''}
+  $('#btnSetProductFirmware').disabled=!P;$('#btnClearProductFirmware').disabled=!P||!P.productFirmware;
   $('#connDot').className='dot dot--'+S.conn;$('#connTxt').textContent=t('st_'+S.conn);
   $('#hdrName').textContent=(P&&P.name)||(S.dev&&S.dev.name)||'—';$('#hdrBatt').textContent=P&&P.battery.level!=null?`🔋${P.battery.level}%`:'';
   $('#btnConn').textContent=on?t('disc'):t('conn');$('#btnConnAll').hidden=on;
-  kv('#passKv',P&&{name:P.name,deviceId:P.deviceId,chipFamily:P.chipFamily,sdkString:P.sdkString,fwVersion:P.fwVersion,productName:P.productName,
-    display:P.display&&`${P.display.width}×${P.display.height} · ${P.display.w2}×${P.display.h2} · f5=${P.display.f5} f6=${P.display.f6} f7=${P.display.f7}`,variant:P.variant,mac:P.mac,
+  kv('#passKv',P&&{name:P.name,deviceId:P.deviceId,chipFamily:P.chipFamily,sdkString:P.sdkString,fwVersion:P.fwVersion,productFirmware:P.productFirmware&&JSON.stringify(P.productFirmware),productName:P.productName,
+    display:P.display&&`${P.display.width}×${P.display.height} · ${P.display.pictureWidth}×${P.display.pictureHeight} · available=${P.display.availableMemoryKiB} KiB`,variant:P.variant,mac:P.mac,
     targetInfoTLV:P.decoded&&P.decoded.targetInfo&&P.decoded.targetInfo.parse&&`${P.decoded.targetInfo.parse.consumed}/${P.decoded.targetInfo.parse.total} B · ok=${P.decoded.targetInfo.parse.ok}`,
     targetInfo:P.targetInfo&&JSON.stringify(P.targetInfo),sysInfo:P.sysInfo&&JSON.stringify(P.sysInfo),
     battery:P.battery.level==null?'— (нет push 0x27)':`${P.battery.level}% (mode ${P.battery.mode??'—'})`,auth:P.auth.ok?'ok, profile '+P.auth.keyProfile:'—',profileId:P.profileId||'— (OTA BLOCK)',
     fileTransfer:P.fileTransfer,unsupported:(P.unsupported||[]).join(', ')||'—',
-    f5History:`${(P.f5History||[]).length} observations`,capabilities:Object.entries(P.capabilities).filter(x=>x[1]).map(x=>x[0]).join(', ')||'—',testModeSuspected:P.testModeSuspected,capturedAt:P.capturedAt},t('noDev'));
-  renderF5History(P);
+    availableMemoryHistory:`${(P.availableMemoryHistory||[]).length} observations`,capabilities:Object.entries(P.capabilities).filter(x=>x[1]).map(x=>x[0]).join(', ')||'—',testModeSuspected:P.testModeSuspected,capturedAt:P.capturedAt},t('noDev'));
+  renderAvailableMemoryHistory(P);
   $('#gattPre').textContent=S.gatt?Object.entries(S.gatt.chars).map(([s,c])=>s+'\n  '+c.join('\n  ')).join('\n'):'—';
   kv('#imgKv',R&&{fileName:R.fileName,size:`${R.size} B`,sha256:R.sha256,kind:R.kind,qixWrapped:R.qixWrapped,chipkey:hx(R.chipkey),ubootHash:R.ubootHash,appBinSize:hx(R.appBinSize),
     crc:JSON.stringify(R.crc),internalJlCrcOk:R.internalJlCrcOk,fileCrc16:hx(R.fileCrc16),'slice on-flash':R.slices.onflash,'slice plaintext':R.slices.plain,version:R.version,sdkString:R.sdkString,targetProfileId:R.targetProfileId,
@@ -2519,7 +2601,19 @@ function init(){
       setSetting(k,v)})});
   $('#btnConn').onclick=()=>S.conn==='on'?disconnect():connect(false);$('#btnConnAll').onclick=()=>connect(true);
   $('#btnTheme').onclick=()=>setSetting('theme',S.set.theme==='dark'?'light':'dark');$('#btnLang').onclick=()=>setSetting('lang',S.set.lang==='en'?'ru':'en');
-  $('#btnRescan').onclick=()=>collectMeta();$('#btnExpPass').onclick=()=>S.P&&download('passport.json',S.P);$('#btnCopyPass').onclick=()=>S.P&&copy(JSON.stringify(S.P,null,2));
+  $('#btnRescan').onclick=()=>collectMeta().catch(e=>{log('EV','',null,'passport reread ✕ '+e.message);toast(e.message,'block')});
+  $('#btnExpPass').onclick=()=>S.P&&download('passport.json',S.P);$('#btnCopyPass').onclick=()=>S.P&&copy(JSON.stringify(S.P,null,2));
+  $('#btnSetProductFirmware').onclick=()=>{
+    if(!S.P)return toast(t('noDev'),'warn');
+    try{
+      S.P.productFirmware=saveProductFirmware(S.P.deviceId,{name:$('#productFwName').value.trim(),version:$('#productFwVersion').value.trim(),
+        build:$('#productFwBuild').value.trim()});
+      idb('passports',S.P);render();toast(t('productFwSaved'),'ok')}
+    catch(e){log('EV','',null,'product firmware ✕ '+e.message);toast(e.message,'warn')}};
+  $('#btnClearProductFirmware').onclick=()=>{
+    if(!S.P)return toast(t('noDev'),'warn');
+    try{clearProductFirmware(S.P.deviceId);S.P.productFirmware=null;idb('passports',S.P);render();toast(t('productFwCleared'),'ok')}
+    catch(e){log('EV','',null,'product firmware clear ✕ '+e.message);toast(e.message,'warn')}};
   const drop=$('#drop');$('#fileImg').onchange=e=>{loadImage(e.target.files[0]);e.target.value=''};
   drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#fileImg').click()}};
   drop.ondragover=e=>{e.preventDefault();drop.classList.add('drop--over')};drop.ondragleave=()=>drop.classList.remove('drop--over');
