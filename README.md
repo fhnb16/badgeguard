@@ -5,7 +5,7 @@ Browser-based inspection and safe device tools for JieLi BLE badges. The app bui
 - `dist-single/index.html` — standalone page.
 - `dist/` — PWA assets.
 
-The project has no runtime dependencies. Build locally with `node build.mjs`; unit tests are `node tests/run.mjs`. GitHub Actions builds both distributions and uploads them as one workflow artifact without installing Node or project packages.
+The project has no runtime dependencies. Build locally with `node build.mjs`; unit tests are `node tests/run.mjs`. GitHub Actions builds both distributions and uploads them as one workflow artifact without installing Node or project packages. Branch pushes also commit regenerated `dist/` and `dist-single/` files back to that branch. Pushing a `v*` tag publishes a GitHub release with a versioned PWA ZIP and standalone HTML file.
 
 ## Confirmed AC697x / BR30 behavior
 
