@@ -549,16 +549,19 @@ const fromHex=s=>Uint8Array.from(s.replace(/[^0-9a-f]/gi,'').match(/../g)||[],h=
 const hx=n=>n==null?'—':'0x'+n.toString(16).toUpperCase();
 const eq=(a,b)=>!!a&&!!b&&a.length===b.length&&a.every((x,i)=>x===b[i]);
 
+const AC697X_PROFILE={match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},chip:'AC697N',family:'AC697x/BR30',sdk:'jl_sdk_ac697_publish',authProfile:'B',
+  transport:{rcsp:'AE00',sideband:'FD01-FD05',qixFd00:false},unsupported:['0xA0','0xAA','0xA6','qix-ota','ble-raw-dump'],fileTransfer:'0x00000007',peripherals:0,ota:false};
 const PROFILES={
   'e87-ac707n':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE'],chars:['fd01','fd02','fd03']},family:'AC707N/BR35',ota:true,chipkey:0x9847,
     flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},ubootSha256Allowlist:[],knownGoodImages:[],expectedForm:null,verifySpan:[0,0xFC000]},
-  'e87-ac697x':{match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},chip:'AC697N',family:'AC697x/BR30',sdk:'jl_sdk_ac697_publish',authProfile:'B',
-    transport:{rcsp:'AE00',sideband:'FD01-FD05',qixFd00:false},unsupported:['0xA0','0xAA','0xA6','qix-ota','ble-raw-dump'],fileTransfer:'0x00000007',peripherals:0,ota:false},
+  'e87-ac697x':AC697X_PROFILE,
+  'e87-ac697x-q87':{...AC697X_PROFILE,match:{...AC697X_PROFILE.match,names:['Q87']},mode:'receiver'},
   'e87-ac701n':{match:{sdkRegex:'jl_sdk_ac701',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC701N/BR28',ota:false}};
 const familyOf=s=>/ac707/.test(s||'')?'AC707N/BR35':/ac697/.test(s||'')?'AC697x/BR30':/ac701/.test(s||'')?'AC701N/BR28':'unknown';
 function matchProfile(P,profiles){
-  for(const[id,p]of Object.entries(profiles)){const m=p.match;
-    if(P.sdkString&&new RegExp(m.sdkRegex).test(P.sdkString)&&m.gattServices.every(s=>P.gatt.services.some(u=>u.startsWith(s)||u.startsWith('0000'+s)))&&m.names.some(n=>(P.name||'').startsWith(n))
+  const deviceNames=[P.advertisedName,P.name].filter(Boolean);
+  for(const name of deviceNames)for(const[id,p]of Object.entries(profiles)){const m=p.match;
+    if(P.sdkString&&new RegExp(m.sdkRegex).test(P.sdkString)&&m.gattServices.every(s=>P.gatt.services.some(u=>u.startsWith(s)||u.startsWith('0000'+s)))&&m.names.some(n=>name.startsWith(n))
       &&(m.chars||[]).every(c=>(P.charIds||[]).includes(c))&&!(m.charsAbsent||[]).some(c=>(P.charIds||[]).includes(c)))return id}
   return null}
 // 9E-кадр: [0]=9E [1],[2]=? (меняются; seq/чексумма не подтверждены) [3]=cmd [4..5]=len LE [6..]=payload — сходится на всех TX/RX лога
@@ -681,6 +684,12 @@ function selfTest(){
   const mp=ids=>matchProfile({sdkString:'jl_sdk_ac707_publish',name:'E87',gatt:{services:['0000ae00-0000-1000-8000-00805f9b34fb','c2e6fd00-e966-1000-8000-bef9c223df6a']},charIds:ids},PROFILES);
   ok('profile: AC707N + FD01/FD02/FD03 → e87-ac707n',mp(['ae01','ae02','fd01','fd02','fd03','fd04','fd05'])==='e87-ac707n');
   ok('profile: without FD02 → none',mp(['ae01','ae02','fd01','fd03'])===null);
+  const q87=matchProfile({sdkString:'jl_sdk_ac697_publish',name:'Q87',gatt:{services:['ae00']},charIds:[]},PROFILES);
+  ok('profile: AC697x Q87 receiver alias is OTA-disabled',q87==='e87-ac697x-q87'&&PROFILES[q87].mode==='receiver'&&PROFILES[q87].ota===false);
+  ok('profile: Q87 advertisement survives different GATT name',matchProfile({sdkString:'jl_sdk_ac697_publish',name:'E87',advertisedName:'Q87',gatt:{services:['ae00']},charIds:[]},PROFILES)==='e87-ac697x-q87');
+  const browseName=decodeBrowseEntries(Uint8Array.of(0x0A,0,0,0,2,0,0,12,0x96,0x65,0x10,0xC4,0x8B,0x23,0xEE,0xC2,0x2E,0xAF,0xDD,0xF6)).entries[0];
+  ok('browse names: preserve raw bytes and alternate UTF-16LE candidate',browseName.nameHex==='966510C48B23EEC22EAFDDF6'&&browseName.nameEncoding==='byte-string'&&
+    browseName.nameAlternateEncoding==='UTF-16LE'&&browseName.nameAlternate.length===6);
   const sevOf=(f,id)=>evaluate(f.P,f.R,f.c).rules.find(r=>r.id===id).severity;
   f=fixture();f.R.internalJlCrcOk=null;ok('R-CRC: internal JL CRC unknown → BLOCK',sevOf(f,'R-CRC')==='block');
   f=fixture();f.c.profiles={...PROFILES,'e87-ac707n':{...PROFILES['e87-ac707n'],expectedForm:'on-flash'}};f.R.slices.plain=null;
@@ -794,10 +803,13 @@ function decodeBrowseEntries(data,queryType=0){
     const cluster=be32(data,i+1),fileNum=be16(data,i+5),n=data[i+7];i+=8;
     if(i+n>data.length)break;
     const nb=data.subarray(i,i+n);i+=n;
-    let name;
-    if(unicode&&n>=2&&n%2===0){let s='';for(let k=0;k<n;k+=2)s+=String.fromCharCode(nb[k]|(nb[k+1]<<8));name=s.replace(/\0+$/,'')}
-    else name=asciiOf(nb).replace(/\0+$/,'');
-    out.push({name,isFile,type:queryType,typeName:isFile?'file':'folder',id:fileNum,cluster,devIndex,dev:DEV_HANDLERS[devIndex]||('dev'+devIndex),size:0})}
+    const utf16le=n>=2&&n%2===0?Array.from({length:n/2},(_,k)=>String.fromCharCode(nb[k*2]|(nb[k*2+1]<<8))).join('').replace(/\0+$/,''):null;
+    const byteString=asciiOf(nb).replace(/\0+$/,'');
+    const name=unicode&&utf16le!=null?utf16le:byteString;
+    const alternate=unicode?byteString:utf16le,nameAlternate=alternate!==name?alternate:null;
+    out.push({name,nameEncoding:unicode&&utf16le!=null?'UTF-16LE':'byte-string',nameHex:hex(nb,''),nameAlternate,
+      nameAlternateEncoding:nameAlternate?(unicode?'byte-string':'UTF-16LE'):null,
+      isFile,type:queryType,typeName:isFile?'file':'folder',id:fileNum,cluster,devIndex,dev:DEV_HANDLERS[devIndex]||('dev'+devIndex),size:0})}
   return{entries:out,consumed:i,trailing:data.length-i}}
 
 // SIMPLE_FILE_TRANS 0x28 op=0: [version?] + N*(id:2 BE, size:2 BE); встречаются 3 варианта начала
@@ -1041,7 +1053,19 @@ Object.assign(T,{ok_done:['Прошивка завершена','Flash complete'
 const DEF={connectTo:15000,reqTo:3000,winTo:5000,chunk:490,win:8,retries:3,expert:false,chime:false,theme:'dark',lang:'ru',readbackOffer:true,spotN:16,verifySpan:'0x0:0xFC000',hashTo:30000,rcspPreAuth:false,probeTo:3000,scanTo:1500,browseTo:5000,otaLoopTo:10000};
 const LS=(k,d)=>{try{return JSON.parse(localStorage.getItem('bg.'+k))??d}catch{return d}};
 const SV=(k,v)=>{try{localStorage.setItem('bg.'+k,JSON.stringify(v))}catch{}};
-const S={set:{...DEF,...LS('set',{})},allow:LS('allow',{uboot:[],image:[]}),flags:LS('flags',{testMode:false,dump:false,probe:false}),profiles:LS('profiles.v3',null)||structuredClone(PROFILES),
+function loadProfiles(){
+  const saved=LS('profiles.v3',null);if(!saved)return structuredClone(PROFILES);
+  const out={...structuredClone(PROFILES),...saved};
+  for(const[id,base]of Object.entries(PROFILES)){
+    const old=saved[id];if(!old)continue;
+    const oldNames=Array.isArray(old.match&&old.match.names)?old.match.names.filter(name=>typeof name==='string'):[];
+    const retainedNames=id==='e87-ac697x'?oldNames.filter(name=>!/^Q87/i.test(name)):oldNames;
+    const names=[...(base.match.names||[]),...retainedNames];
+    out[id]={...base,...old,match:{...base.match,...(old.match||{}),names:[...new Set(names)]}};
+    if(Object.hasOwn(base,'ota'))out[id].ota=base.ota;
+    if(Object.hasOwn(base,'mode'))out[id].mode=base.mode}
+  return out}
+const S={set:{...DEF,...LS('set',{})},allow:LS('allow',{uboot:[],image:[]}),flags:LS('flags',{testMode:false,dump:false,probe:false}),profiles:loadProfiles(),
   dev:null,chars:{},gatt:null,gattReady:false,conn:'off',P:null,R:null,buf:null,dumpPass:null,V:null,path:'qix',phase:'idle',log:[],waiters:[],ac:null,wake:null,
   prog:{done:0,total:0,t0:0,start:0,win:0},abort:false,locked:false,userDisc:false,reconnecting:false,report:null,dumpCert:null,dumpBuf:null,img:null,l0:null,int:null,asyncTests:null,chunkCrc:{ok:0,fail:0},boot:false,quiet:false,battAt:0,maxNotify:{},
   rawLog:[],scan:[],capMatrix:null,smallFiles:[],res:[],resManifest:null,health:null,otaProbe:null};
@@ -1090,7 +1114,7 @@ function decode(k,u){if(u[0]===0xFE&&u[1]===0xDC&&u[2]===0xBA){const r=parseRcsp
 /* ===== BLE transport =====
  * GATT E87 сверен с qix-ble service.py: сервис C2E6FD00 = Qix-sideband (TX FD02, RX FD01/FD03) — характеристика FD00 не обнаружена на E87;
  * AE00 = RCSP (TX AE01, RX AE02). FD05 не подписываем: по qix-ble это ломает REQ_UPDATE (silent reject). 2A19 на этой прошивке пустой. */
-const NAMES=['E87','E92','L8','X9','LED Badge','EC-BADGE'];
+const NAMES=['E87','E92','L8','X9','Q87','LED Badge','EC-BADGE'];
 const SVC={ae00:'0000ae00-0000-1000-8000-00805f9b34fb',fd:'c2e6fd00-e966-1000-8000-bef9c223df6a'};
 const OPT=[SVC.ae00,SVC.fd,'battery_service','generic_access'];
 const NOTIFY=['ae02','fd01','fd03'];
@@ -1125,6 +1149,11 @@ function onFrame(k,u){if(!S.P)return;
     if(f.cmd===0xC7)S.P.display=decodeC7(f.payload);
     // push после bootstrap: cmd 0x27 [mode, percent] (qix-ble battery.py); mode 1 ≈ зарядка — не подтверждено, в R-BATT не используем
     else if(f.cmd===0x27&&f.len===2){S.P.battery.level=f.payload[1];S.P.battery.mode=f.payload[0];S.battAt=Date.now();render()}}
+  else if(k==='ae02'&&u[0]===0xFE&&u[3]===0xC0&&u[4]===0xE5){
+    S.P.capabilities.rcspOtaObserved=true;
+    const receiver=S.P.mode==='receiver'||/^Q87/i.test(S.dev&&S.dev.name||S.P.name||'');
+    S.P.capabilities.rcspOta=!receiver;
+    log('EV',k,u,`OTA pull request observed${receiver?' in receiver mode':''}; transfer remains gated`);render()}
   else if(isFE(u,0x03)||isFE(u,0x07)){const r=parseRcspResp(u);if(!r||r.status!==0)return;
     if(r.cmd===0x03){const attrs=parseTlv(r.data),ti=decodeTargetInfo(attrs);S.P.targetInfo=ti;S.P.decoded={...(S.P.decoded||{}),targetInfo:decodeTargetInfo2(attrs)};
       if(ti.edr_addr)S.P.mac=ti.edr_addr;if(ti.fw_version&&!S.P.fwVersion)S.P.fwVersion=ti.fw_version}
@@ -1301,8 +1330,9 @@ async function bootstrapFull(ms){const r={},rc=c=>ackOk(waitFor((k,u)=>k==='ae02
 async function collectMeta(){
   const t0=Date.now(),left=()=>Math.max(300,Math.min(S.set.reqTo,12000-(Date.now()-t0)));
   S.boot=false;
-  S.P={deviceId:S.dev.id,name:S.dev.name||null,chipFamily:'unknown',sdkString:null,fwVersion:null,productName:null,battery:{level:null,charging:null,mode:null},gatt:S.gatt,
-    capabilities:{qixFd00:!!S.chars.fd00,rcspOta:false,rcspOtaProbe:false,rcspTransport:!!(S.chars.ae01&&S.chars.ae02),batteryService:!!S.chars['2a19']},auth:{ok:false,keyProfile:null},
+  S.P={deviceId:S.dev.id,name:S.dev.name||null,advertisedName:S.dev.name||null,chipFamily:'unknown',sdkString:null,fwVersion:null,productName:null,battery:{level:null,charging:null,mode:null},gatt:S.gatt,
+    capabilities:{qixFd00:!!S.chars.fd00,rcspOta:false,rcspOtaProbe:false,rcspOtaObserved:false,
+      rcspTransport:!!(S.chars.ae01&&S.chars.ae02),batteryService:!!S.chars['2a19']},auth:{ok:false,keyProfile:null},
     testModeSuspected:!!S.flags.testMode,profileId:null,capturedAt:null,bootMarker:false,display:null,mac:null,targetInfo:null,sysInfo:null,decoded:null,
     unsupported:[],transport:{rcsp:!!(S.chars.ae01&&S.chars.ae02),sideband:!!(S.chars.fd01&&S.chars.fd02&&S.chars.fd03),qixFd00:!!S.chars.fd00},
     variant:null,charIds:Object.keys(S.chars).sort()};
@@ -1312,8 +1342,6 @@ async function collectMeta(){
   await step('passive',()=>sleep(Math.min(600,left())));
   await step('auth',async()=>{S.P.auth=await authHandshake(left())});
   if(S.P.auth.ok){
-    await step('feature_map',async()=>{const r=await rcspCmd(0x02,[],left(),{note:'target_feature_map 0x02'});if(r.kind==='fe-response'&&r.status===0&&r.payload.length>=4){
-      S.P.featureMap={mask:be32(r.payload),decoded:decodeFeatureMap(be32(r.payload))}}});
     await step('bootstrap',async()=>{const r=await bootstrapFull(Math.min(1500,left()));S.boot=true;log('EV','',null,'bootstrap '+JSON.stringify(r))})}
   else{if(S.set.rcspPreAuth){
       await step('0x03',()=>req('ae01',fe(0xC0,0x03,[nextSN(),0xFF,0xFF,0xFF,0xFF,0x01]),(k,u)=>k==='ae02'&&isFE(u,0x03),'target_info (pre-auth)',left()));
@@ -1325,6 +1353,9 @@ async function collectMeta(){
   S.P.chipFamily=familyOf(S.P.sdkString);S.P.profileId=matchProfile(S.P,S.profiles);
   S.P.variant=S.P.capabilities.qixFd00?'Qix characteristic + RCSP AE00':S.P.transport.sideband?'FD01–FD05 sideband + RCSP AE00':'RCSP AE00 only';
   const profile=S.P.profileId&&S.profiles[S.P.profileId];
+  const receiverMode=!!(profile&&profile.mode==='receiver')||/^Q87/i.test(S.dev&&S.dev.name||S.P.name||'');
+  S.P.mode=receiverMode?'receiver':profile&&profile.mode||'standard';
+  S.P.capabilities.rcspOta=!!(S.P.capabilities.rcspOtaObserved&&!receiverMode);
   S.P.unsupported=profile&&profile.unsupported?profile.unsupported.slice():[];
   S.P.fileTransfer=S.P.decoded&&S.P.decoded.targetInfo&&S.P.decoded.targetInfo.fields.fileTransfer?
     S.P.decoded.targetInfo.fields.fileTransfer.hex:null;
@@ -1356,6 +1387,7 @@ function validateReadOnlyProbe(transport,u){
   else throw new Error('Неизвестный транспорт')}
 // Доказательства из полевого лога 2026-11-14 (data/session-2026-11-14.log) — стартовая карта
 const EVIDENCE_SEED=[
+  {op:0x02,transport:'AE01',kind:'fe-response',len:0,status:2,verdict:'unsupported',note:'GET_TARGET_FEATURE_MAP returned JL_PRO_STATUS_UNKNOWN_CMD in the supplied capture',src:'user-capture'},
   {op:0x06,transport:'AE01',kind:'fe-response',len:2,status:0,verdict:'ok',dataHex:'',note:'Phase-1 reset_auth, устройство отвечает FE',src:'log'},
   {op:0x03,transport:'AE01',kind:'fe-response',len:125,status:0,verdict:'ok',dataHex:'02 00 20 05 01 00 00 00 00 09 02 46 88 00 02 09 DC',note:'target_info: полный TLV 125 Б; dataHex приведён префиксом',src:'log'},
   {op:0x07,transport:'AE01',kind:'fe-response',len:56,status:0,verdict:'ok',dataHex:'00 1A 02 04 00 00 00 00',note:'sys_info: TLV 56 Б; dataHex приведён префиксом',src:'log'},
@@ -1364,6 +1396,8 @@ const EVIDENCE_SEED=[
   {op:0x21,transport:'FD01',kind:'sideband-data',len:2,status:null,verdict:'ok',note:'sync_state',src:'log'},
   {op:0x22,transport:'FD01',kind:'sideband-data',len:21,status:null,verdict:'stub',note:'steps: заглушка watch-SDK (датчиков нет)',src:'log'},
   {op:0x24,transport:'FD01',kind:'sideband-data',len:7,status:null,verdict:'stub',note:'hr: заглушка watch-SDK',src:'log'},
+  {op:0xE5,transport:'AE01',kind:'fe-push',len:6,status:null,verdict:'observed-request',dataHex:'00 00 00 00 00 08',
+    note:'OTA pull request captured; request alone does not validate the image or arm transfer',src:'user-capture'},
   {op:0xA0,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'A0 00',note:'Qix SET_TEST_MODE: только транспортный ACK, 8 проб без данных',src:'log'},
   {op:0xAA,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'AA 00',note:'TEST_GET_FLASH 256/128/64/16 Б × 2 сеанса — данных нет',src:'log'},
   {op:0xA6,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'A6 00',note:'TEST_CLOSE: только ACK; после него нужен power-cycle',src:'log'}];
@@ -1497,22 +1531,23 @@ async function browseAll({deep=true,maxDepth=3,readNum=32}={}){
       BROWSE.tree.push(node);renderLab();
       if(!root.ok){log('EV','',null,`browse ${DEV_HANDLERS[dev]}: ${root.reason}`);continue}
       log('EV','',null,`browse ${DEV_HANDLERS[dev]}: ${root.entries.length} записей (${root.bytes} Б, push=${root.pushes})`);
-      await walk(node,root.entries,[],1);
+      await walk(node,root.entries,[],1,node.dev);
     }
-    BROWSE.manifest=await buildResourcesManifest();
+    BROWSE.manifest=await buildResourcesManifest();S.resManifest=BROWSE.manifest;
     log('EV','',null,`browse готов: ${BROWSE.files.length} файлов, ${Date.now()-t0} мс`);
     return BROWSE}
   finally{BROWSE.running=false;renderLab()}
-  async function walk(node,entries,path,depth){
+  async function walk(node,entries,path,depth,deviceHandler){
     for(const e of entries){
       if(S.abort)return;
       const full=[...path,e.name].join('/');
-      if(e.isFile){const f={...e,path:full,dev,node};node.files.push(f);BROWSE.files.push(f);continue}
-      node.children.push({...e,path:full,children:[],files:[]});
+      const entryDevice=DEV_HANDLERS[e.devIndex]?e.devIndex:deviceHandler;
+      if(e.isFile){const f={...e,path:full,dev:entryDevice,node};node.files.push(f);BROWSE.files.push(f);continue}
+      const sub={...e,path:full,dev:entryDevice,children:[],files:[]};
+      node.children.push(sub);
       if(!deep||depth>=maxDepth)continue;
-      const sub=node.children[node.children.length-1];
-      const r=await browseOnce({type:1,devHandler:e.devIndex!=null?dev:dev,readNum,clusters:[e.cluster]});
-      if(r.ok&&r.entries.length){log('EV','',null,`  ${full}: ${r.entries.length} записей`);await walk(sub,r.entries,[...path,e.name],depth+1)}
+      const r=await browseOnce({type:1,devHandler:entryDevice,readNum,clusters:[e.cluster]});
+      if(r.ok&&r.entries.length){log('EV','',null,`  ${full}: ${r.entries.length} записей`);await walk(sub,r.entries,[...path,e.name],depth+1,entryDevice)}
       else if(!r.ok)log('EV','',null,`  ${full}: ${r.reason}`);
       renderLab()}}}
 
@@ -1535,16 +1570,60 @@ async function readSmallFile(e,{offset=0,len=null}={}){
   if(r.status!==0)return{ok:false,error:'RCSP '+statusName(r.status),data:new Uint8Array(0)};
   return parseSmallFileRead(r.payload||new Uint8Array(0))}
 
-/* Выгрузка: для каждого файла — small read по id; пишем sha256 и собираем манифест. */
+const MAX_BROWSE_FILE_BYTES=16*1024*1024;
+function browseReadQueue(){
+  const q=[];let wake=null;
+  const un=rcspHook(i=>{
+    if(i.cmd===0x01&&i.xmOp===0x24){q.push({kind:'data',frame:i});if(wake){const f=wake;wake=null;f()}return true}
+    if(i.cmd===0x24&&i.payload&&i.payload[0]===0x80){q.push({kind:'finish',frame:i});if(wake){const f=wake;wake=null;f()}}
+    return false});
+  return{un,async next(ms){const end=Date.now()+ms;
+    while(!q.length&&Date.now()<end&&!S.abort)await new Promise(r=>{wake=r;setTimeout(()=>{if(wake===r)wake=null;r()},Math.min(60,Math.max(1,end-Date.now())))});
+    return q.shift()||null}}}
+
+async function readBrowseFile(e){
+  if(!S.P||!S.P.auth.ok||S.conn!=='on'||!S.gattReady)throw new Error('нужна подключённая авторизованная сессия');
+  const dev=e.devHandler??e.dev,cluster=e.cluster;
+  if(!Number.isInteger(dev)||!DEV_HANDLERS[dev])throw new Error('неизвестный файловый дескриптор');
+  if(!Number.isInteger(cluster)||cluster<0||cluster>0xFFFFFFFF)throw new Error('неверный cluster файла');
+  const Q=browseReadQueue();
+  try{
+    const body=Uint8Array.of(0x01,(dev>>>24)&255,(dev>>>16)&255,(dev>>>8)&255,dev&255,0,0,0,0,
+      (cluster>>>24)&255,(cluster>>>16)&255,(cluster>>>8)&255,cluster&255);
+    const r=await rcspCmd(0x24,body,S.set.reqTo,{note:`file return ${e.path||e.name} cluster=${hx(cluster)}`});
+    if(r.kind==='timeout')return{ok:false,error:'timeout',data:new Uint8Array(0)};
+    if(r.status!==0)return{ok:false,error:'RCSP '+statusName(r.status),data:new Uint8Array(0)};
+    if(!r.payload||r.payload.length<5||r.payload[0]!==0x01)return{ok:false,error:'unexpected 0x24 size response',data:new Uint8Array(0)};
+    const size=be32(r.payload,1);
+    if(size>MAX_BROWSE_FILE_BYTES)return{ok:false,error:`file exceeds ${MAX_BROWSE_FILE_BYTES} byte limit`,data:new Uint8Array(0)};
+    const data=new Uint8Array(size);let offset=0,crc=0;
+    for(;;){
+      if(S.abort)return{ok:false,error:'aborted',data:new Uint8Array(0)};
+      const item=await Q.next(Math.max(10000,S.set.browseTo));
+      if(!item)return{ok:false,error:'transfer timeout',data:new Uint8Array(0)};
+      if(item.kind==='finish'){
+        if(offset!==size)return{ok:false,error:`incomplete transfer (${offset}/${size})`,data:new Uint8Array(0)};
+        return{ok:true,size,crc16:crc,data}}
+      const p=item.frame.payload||new Uint8Array(0);
+      if(p.length<7)return{ok:false,error:'short 0x24 data frame',data:new Uint8Array(0)};
+      const frameOffset=be32(p),frameCrc=be16(p,4),chunk=p.subarray(6);
+      if(frameOffset!==offset||!chunk.length||offset+chunk.length>size)return{ok:false,error:`invalid 0x24 chunk at ${hx(frameOffset)}`,data:new Uint8Array(0)};
+      const nextCrc=crc16(chunk,crc);
+      if(nextCrc!==frameCrc)return{ok:false,error:`0x24 CRC mismatch at ${hx(offset)}`,data:new Uint8Array(0)};
+      data.set(chunk,offset);offset+=chunk.length;crc=nextCrc}
+  }finally{Q.un()}}
+
+/* Выгрузка: browse-файлы возвращаются по cluster через 0x24, watch-файлы — через 0x28. */
 async function fetchResources({limit=0}={}){
   if(!BROWSE.files.length&&!S.smallFiles.length)throw new Error('сначала выполните обход (browse / small files)');
-  const targets=[...BROWSE.files.map(f=>({id:f.id,type:1,typeName:'file',name:f.path,size:f.size,src:'browse'})),
+  const targets=[...BROWSE.files.map(f=>({id:f.id,type:1,typeName:'file',name:f.path,size:f.size,cluster:f.cluster,devHandler:f.dev,
+      nameHex:f.nameHex,nameEncoding:f.nameEncoding,nameAlternate:f.nameAlternate,nameAlternateEncoding:f.nameAlternateEncoding,src:'browse'})),
     ...S.smallFiles.map(f=>({id:f.id,type:f.type,typeName:f.typeName,name:`${f.typeName}/${f.id}.bin`,size:f.size,src:'0x28'}))];
   const list=limit?targets.slice(0,limit):targets;
   S.res=[];S.abort=false;S.prog={done:0,total:list.length,t0:performance.now(),start:0,win:0};
   for(const t of list){
     if(S.abort)break;
-    try{const r=await readSmallFile(t);
+    try{const r=t.src==='browse'?await readBrowseFile(t):await readSmallFile(t);
       if(r.ok&&r.data.length){const sha=await sha256hex(r.data);
         S.res.push({...t,bytes:r.data.length,sha256:sha,crc16:r.crc16,crcOk:r.crc16!=null?crc16(r.data)===r.crc16:null,data:r.data,variant:r.variant});
         log('EV','',null,`fs get ${t.name}: ${r.data.length} Б sha256=${sha.slice(0,12)}… crc=${hx(r.crc16)}`)}
@@ -1556,13 +1635,18 @@ async function fetchResources({limit=0}={}){
 
 async function buildResourcesManifest(){
   const items=[];
-  for(const r of S.res||[])items.push({name:r.name,path:r.name,source:r.src,type:r.type,id:r.id,bytes:r.bytes,sha256:r.sha256,crc16:r.crc16==null?null:hx(r.crc16),crcVerified:r.crcOk});
+  for(const r of S.res||[])items.push({name:r.name,path:r.name,source:r.src,type:r.type,id:r.id,cluster:r.cluster??null,
+    nameHex:r.nameHex??null,nameEncoding:r.nameEncoding??null,nameAlternate:r.nameAlternate??null,nameAlternateEncoding:r.nameAlternateEncoding??null,
+    bytes:r.bytes,sha256:r.sha256,crc16:r.crc16==null?null:hx(r.crc16),crcVerified:r.crcOk});
   return{artifact:'resources-manifest.json',generatedAt:new Date().toISOString(),
     device:S.P?{deviceId:S.P.deviceId,name:S.P.name,fwVersion:S.P.fwVersion,profileId:S.P.profileId,chipFamily:S.P.chipFamily}:null,
-    transport:'RCSP AE00 (0x0C browse + 0x28 small-file read)',
+    transport:'RCSP AE00 (0x0C browse + 0x24 cluster return + 0x28 small-file read)',
     note:'ресурсы прошивки (циферблаты/картинки/шрифты/конфиги). Код прошивки, uboot и chipkey этим путём НЕ доступны.',
-    browseTree:BROWSE.tree.map(n=>({dev:n.devName,ok:n.ok,reason:n.reason,files:n.files.map(f=>({path:f.path,id:f.id,cluster:f.cluster})),
-      children:n.children.map(c=>({path:c.path,cluster:c.cluster,files:c.files.map(f=>({path:f.path,id:f.id}))}))})),
+    browseTree:BROWSE.tree.map(n=>({dev:n.devName,ok:n.ok,reason:n.reason,files:n.files.map(f=>({path:f.path,id:f.id,cluster:f.cluster,nameHex:f.nameHex,nameEncoding:f.nameEncoding,
+        nameAlternate:f.nameAlternate,nameAlternateEncoding:f.nameAlternateEncoding})),
+      children:n.children.map(c=>({path:c.path,cluster:c.cluster,nameHex:c.nameHex,nameEncoding:c.nameEncoding,nameAlternate:c.nameAlternate,
+        nameAlternateEncoding:c.nameAlternateEncoding,files:c.files.map(f=>({path:f.path,id:f.id,cluster:f.cluster,nameHex:f.nameHex,nameEncoding:f.nameEncoding,
+          nameAlternate:f.nameAlternate,nameAlternateEncoding:f.nameAlternateEncoding}))}))})),
     count:items.length,items}}
 
 /* ZIP без зависимостей (store, без сжатия) — чтобы выгрузить ресурсы одним файлом */
@@ -1641,10 +1725,11 @@ async function otaProbe(){
 
 /* ---------- Интерлок записи ---------- */
 function otaGates(){
-  const P=S.P,dp=otaBankInfo(),img=S.R,w=S.wired||{};
+  const P=S.P,dp=otaBankInfo(),img=S.R,w=S.wired||{},profile=P&&P.profileId&&S.profiles[P.profileId];
   return[
     {id:'G-CONN',ok:S.conn==='on'&&S.gattReady,msg:'GATT жив'},
     {id:'G-AUTH',ok:!!(P&&P.auth.ok),msg:'RCSP auth пройден'},
+    {id:'G-PROFILE',ok:!!(profile&&profile.ota===true),msg:'OTA подтверждён для профиля устройства',ev:profile?P.profileId:'профиль не распознан'},
     {id:'G-PROBE',ok:OTA.canUpdate===0,msg:'0xE2 = 0x00 (устройство согласно)',ev:OTA.canUpdate==null?'зонд не выполнен':e2txt(OTA.canUpdate)},
     {id:'G-IMAGE',ok:!!(img&&S.buf),msg:'Загружен образ прошивки (.ufw/.bin)'},
     {id:'G-KEY',ok:!!(img&&img.chipkey!=null)&&!!w.chipkey&&img.chipkey===w.chipkey,msg:'chipkey образа = chipkey устройства (снят проводом)',
@@ -1678,7 +1763,7 @@ async function otaFlash(){
   if(!S.buf)throw new Error('нет образа');
   const ufw=new Uint8Array(S.buf);OTA.running=true;S.abort=false;OTA.error=null;OTA.pass=1;OTA.highWater=0;OTA.result=null;
   S.prog={done:0,total:ufw.length,t0:performance.now(),start:0,win:0};
-  const wl=await wakeHold();
+  const wl=await wakeHold();let pendingQueue=null;
   try{
     setPhase('preflight');
     if(OTA.canUpdate!==0){const p=await otaProbe();if(OTA.canUpdate!==0)throw new Error('E-OTA-001 устройство не согласно: '+e2txt(OTA.canUpdate))}
@@ -1689,8 +1774,9 @@ async function otaFlash(){
       if(!(e1.offset===0&&e1.len===0)&&e1.offset+e1.len>ufw.length)throw new Error('E-OTA-002 E1 требует байты за пределами файла — не тот образ');
       const e2=await rcspCmd(0xE2,mark,S.set.reqTo,{note:'OTA E2'});
       if(e2.kind!=='fe-response'||!e2.payload||e2.payload[0]!==0)throw new Error('E-OTA-001 E2='+hx(e2.payload&&e2.payload[0]));
-      setPhase('armed');await rcspCmd(0xE3,[],S.set.reqTo,{note:'OTA E3 enter-update'}); // девайс может не ответить и сразу начать тянуть данные
-      setPhase('transferring');result=await otaServe(ufw)}
+      setPhase('armed');pendingQueue=otaQueue();
+      await rcspCmd(0xE3,[],S.set.reqTo,{note:'OTA E3 enter-update'}); // устройству может прийти E5 до ответа на E3
+      setPhase('transferring');result=await otaServe(ufw,pendingQueue);pendingQueue=null}
     if(result===0x80){ // loader загружен → relink, НЕ разрываем ссылку сами
       otaLog('E6=0x80: loader загружен, шлём 0x0B и ждём, что устройство само оборвёт связь');
       const sw=await rcspCmd(0x0B,[0x00,0x01],6000,{note:'OTA 0x0B switch-communication-way'});
@@ -1705,8 +1791,9 @@ async function otaFlash(){
       const loader=await otaIsLoader();
       otaLog('pass 2: attr9 loader='+loader);
       OTA.pass=2;setPhase('transferring');
+      pendingQueue=otaQueue();
       await rcspCmd(0xE3,[],S.set.reqTo,{note:'OTA E3 pass2'}); // E1/E2 в pass 2 НЕ повторяем
-      result=await otaServe(ufw)}
+      result=await otaServe(ufw,pendingQueue);pendingQueue=null}
     OTA.result=result;
     if(result!==0)throw new Error('E-OTA-004 E6='+hx(result)+' '+e6txt(result));
     setPhase('rebooting');await rcspCmd(0xE7,[0x00],4000,{note:'OTA E7 reboot'}).catch(()=>{});
@@ -1718,10 +1805,10 @@ async function otaFlash(){
   catch(e){OTA.error=e.message;setPhase('error');otaLog('✕ '+e.message);
     if(/E-OTA-004|E-OTA-003/.test(e.message)){S.locked=true;disarmOta()}
     throw e}
-  finally{OTA.running=false;if(wl)wl.release().catch(()=>{});renderLab()}}
+  finally{if(pendingQueue)pendingQueue.un();OTA.running=false;if(wl)wl.release().catch(()=>{});renderLab()}}
 
-async function otaServe(ufw){
-  const Q=otaQueue(),total=ufw.length;let idle=0;
+async function otaServe(ufw,Q=otaQueue()){
+  const total=ufw.length;let idle=0;
   try{
     for(;;){
       if(S.abort)throw new Error('E-ABORT');
