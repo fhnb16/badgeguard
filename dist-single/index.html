@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; worker-src blob:; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; worker-src blob:; img-src data:; connect-src 'self' http://127.0.0.1:8765 http://localhost:8765 https:; base-uri 'none'; form-action 'none'">
 <title>BadgeGuard — E87 OTA</title>
 
 <style>
@@ -80,6 +80,11 @@ h2,h3{margin:0;font-weight:600}
 .set{display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:.6rem 1rem}
 .set label{display:flex;flex-direction:column;gap:.2rem;font-size:.85rem;color:var(--mute)}.set .chk{flex-direction:row;color:var(--text)}
 .lab__row{display:flex;align-items:end;gap:.6rem;flex-wrap:wrap;margin:.6rem 0}.lab__row label{display:flex;flex-direction:column;gap:.25rem;color:var(--mute);font-size:.85rem}.lab__row .lab__frame{flex:1;min-width:min(100%,26rem)}.lab__file{flex:1;min-width:16rem}
+.ota-api{border:1px solid var(--line);border-radius:6px;padding:.6rem}.ota-api summary{cursor:pointer;color:var(--info)}
+.ota-api select,.ota-api input{font:inherit;padding:.4rem .5rem;border-radius:6px;border:1px solid var(--line);background:var(--over);color:var(--text);min-width:0}
+.ota-api .lab__row label{min-width:12rem}.ota-api__helper{flex:1}.ota-api__token{min-width:14rem}
+.ota-api__target{max-width:28rem;overflow-wrap:anywhere;color:var(--mute)}
+.ota-api__download{display:block;overflow-wrap:anywhere;color:var(--cyan);font-family:var(--mono);font-size:.85rem}
 .set2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem}@media (max-width:800px){.set2{grid-template-columns:minmax(0,1fr)}}
 .set2 h3{font-size:1rem;margin-bottom:.4rem}
 .allow{display:flex;flex-wrap:wrap;gap:.4rem}.allow input{flex:1;min-width:12rem;font-family:var(--mono);font-size:12px}
@@ -206,6 +211,89 @@ h2,h3{margin:0;font-weight:600}
       <label class="lab__file"><span data-i18n="contentImage"></span><input id="contentImage" type="file" accept="image/*"></label>
       <button id="btnSendImage" class="btn" data-i18n="sendImage"></button>
     </div>
+    <details class="fold ota-api">
+      <summary data-i18n="otaApiTitle"></summary>
+      <p class="note" data-i18n="otaApiNote"></p>
+      <div class="lab__row">
+        <label><span data-i18n="otaApiEndpoint"></span>
+          <select id="otaApiEndpoint">
+            <optgroup label="ZRun / Zijun">
+              <option value="zrun-www-prod">www.zgntec.com · prod/upgrade (documented)</option>
+              <option value="zrun-www-dev">www.zgntec.com · dev/upgrade (documented)</option>
+              <option value="zrun-www-test">www.zgntec.com · test/upgrade (candidate)</option>
+              <option value="zrun-www-gray">www.zgntec.com · gray/upgrade (candidate)</option>
+              <option value="zrun-www-v2">www.zgntec.com · v2/upgrade (candidate)</option>
+              <option value="zrun-www-prod-upgrade-v2">www.zgntec.com · prod/upgrade/v2 (candidate)</option>
+              <option value="zrun-www-prod-firmware">www.zgntec.com · prod/firmware (candidate)</option>
+              <option value="zrun-www-prod-ota">www.zgntec.com · prod/ota (candidate)</option>
+              <option value="zrun-www-prod-version">www.zgntec.com · prod/version (candidate)</option>
+              <option value="zrun-www-prod-check">www.zgntec.com · prod/check (candidate)</option>
+              <option value="zrun-www-ota-upgrade">www.zgntec.com · hy-cloud/ota/upgrade (candidate)</option>
+              <option value="zrun-www-device-upgrade">www.zgntec.com · hy-cloud/device/upgrade (candidate)</option>
+              <option value="zrun-www-cloud-root">www.zgntec.com · hy-cloud/ (candidate)</option>
+              <option value="zrun-www-root">www.zgntec.com · / (candidate)</option>
+              <option value="zrun-bare-prod">zgntec.com · prod/upgrade (candidate)</option>
+              <option value="zrun-bare-dev">zgntec.com · dev/upgrade (candidate)</option>
+              <option value="zrun-bare-test">zgntec.com · test/upgrade (candidate)</option>
+              <option value="zrun-bare-gray">zgntec.com · gray/upgrade (candidate)</option>
+              <option value="zrun-bare-v2">zgntec.com · v2/upgrade (candidate)</option>
+              <option value="zrun-bare-prod-upgrade-v2">zgntec.com · prod/upgrade/v2 (candidate)</option>
+              <option value="zrun-bare-prod-firmware">zgntec.com · prod/firmware (candidate)</option>
+              <option value="zrun-bare-prod-ota">zgntec.com · prod/ota (candidate)</option>
+              <option value="zrun-bare-prod-version">zgntec.com · prod/version (candidate)</option>
+              <option value="zrun-bare-prod-check">zgntec.com · prod/check (candidate)</option>
+              <option value="zrun-bare-ota-upgrade">zgntec.com · hy-cloud/ota/upgrade (candidate)</option>
+              <option value="zrun-bare-device-upgrade">zgntec.com · hy-cloud/device/upgrade (candidate)</option>
+              <option value="zrun-bare-cloud-root">zgntec.com · hy-cloud/ (candidate)</option>
+              <option value="zrun-bare-root">zgntec.com · / (candidate)</option>
+            </optgroup>
+            <optgroup label="JieLi — contract unknown; requests disabled">
+              <option value="jieli-pkgman" disabled>pkgman.jieliapp.com/</option>
+              <option value="jieli-cam" disabled>cam.jieliapp.com/</option>
+              <option value="jieli-api-ota" disabled>api.jieliapp.com/ota/upgrade</option>
+              <option value="jieli-api-firmware" disabled>api.jieliapp.com/app/firmware</option>
+              <option value="jieli-open-file" disabled>open.jieliapp.com/ota/file</option>
+              <option value="jieli-ota-upgrade" disabled>ota.jieliapp.com/upgrade</option>
+              <option value="jieli-www-ota" disabled>www.zh-jieli.com/api/ota/upgrade</option>
+              <option value="jieli-www-firmware" disabled>www.zh-jieli.com/openapi/firmware</option>
+              <option value="jieli-docs" disabled>doc.zh-jieli.com/</option>
+              <option value="jieli-gitlab" disabled>gitlab.zh-jieli.com/</option>
+              <option value="jieli-test-docs" disabled>test03.jieliapp.com/</option>
+              <option value="jieli-root" disabled>jieliapp.com/</option>
+            </optgroup>
+            <optgroup label="Репозитории / магазины — не API">
+              <option value="source-jieli-ota-apk" disabled>Android-JL_OTA · APK</option>
+              <option value="source-jieli-bluetooth-apk" disabled>Android-JL_Bluetooth · APK</option>
+              <option value="source-electroniccats-fw" disabled>ElectronicCats · AC707 firmware</option>
+              <option value="source-ebadge-cli" disabled>ebadge-python-cli</option>
+              <option value="source-qq-store" disabled>JieLi OTA · 应用宝</option>
+              <option value="source-app-store" disabled>JieLi OTA · App Store</option>
+              <option value="source-play-store" disabled>ZRun · Google Play</option>
+            </optgroup>
+          </select>
+          <output id="otaApiEndpointUrl" class="ota-api__target mono"></output>
+        </label>
+        <label><span data-i18n="otaApiModel"></span><input id="otaApiModel" list="otaApiModels" maxlength="80" value="E87_EN"></label>
+        <datalist id="otaApiModels">
+          <option value="E87_EN"></option><option value="E87"></option><option value="11.1.0.2"></option>
+          <option value="jl_sdk_ac697_publish"></option><option value="139"></option><option value="0x8B"></option>
+          <option value="2"></option><option value="0x2"></option>
+        </datalist>
+        <label><span data-i18n="otaApiVersion"></span><input id="otaApiVersion" list="otaApiVersions" maxlength="80" value="11.1.0.2"></label>
+        <datalist id="otaApiVersions">
+          <option value="1.16.2.28"></option><option value="11.1.0.2"></option><option value="V11.1.0.2_251229"></option>
+        </datalist>
+      </div>
+      <div class="lab__row">
+        <label class="ota-api__helper"><span data-i18n="otaApiHelper"></span><input id="otaApiHelperUrl" type="url" value="http://127.0.0.1:8765/ota-helper.php" autocomplete="off"></label>
+        <label class="ota-api__token"><span data-i18n="otaApiToken"></span><input id="otaApiHelperToken" type="password" autocomplete="off"></label>
+        <button id="btnOtaApiCheck" class="btn" disabled data-i18n="otaApiSend"></button>
+      </div>
+      <label class="chk"><input id="otaApiConsent" type="checkbox"><span data-i18n="otaApiConsent"></span></label>
+      <p class="note" data-i18n="otaApiNoSchema"></p>
+      <a id="otaApiDownload" class="ota-api__download" target="_blank" rel="noopener noreferrer" hidden data-i18n="otaApiDownload"></a>
+      <pre id="otaApiResult" class="mono pre">—</pre>
+    </details>
     <pre id="labResult" class="mono pre">—</pre>
   </section>
   <section class="panel panel--wide">
@@ -1100,7 +1188,7 @@ const T={conn:['Подключить','Connect'],disc:['Отключить','Dis
   allow:['Allowlist SHA-256 (known-good образы и OEM uboot)','SHA-256 allowlist (known-good images, OEM uboot)'],add:['Добавить','Add'],
   impProf:['Импорт профилей','Import profiles'],expProf:['Экспорт профилей','Export profiles'],reset:['Сброс к умолчаниям','Reset defaults'],tests:['Самотесты','Self-tests'],
   discT:['Перед началом','Before you start'],accept:['Понимаю','I understand'],
-  discB:['Только своё железо, исследовательское использование. Прошивка может окирпичить бейдж; восстановление — только USB-ISP вне браузера. Файлы не покидают устройство, сетевых запросов нет.','Own hardware only, research use. Flashing can brick the badge; recovery is USB-ISP only, outside the browser. Files stay local, no network requests.'],
+  discB:['Только своё железо, исследовательское использование. Прошивка может окирпичить бейдж; восстановление — только USB-ISP вне браузера. Файлы остаются локально. Дополнительно можно вручную отправить выбранные model/version через PHP helper для проверки OTA; authKey и файлы не передаются.','Own hardware only, research use. Flashing can brick the badge; recovery is USB-ISP only, outside the browser. Files stay local. You may manually send selected model/version through a PHP helper for an OTA check; authKey and files are not sent.'],
   unsup:['E-BLE-001: нет Web Bluetooth. Нужен Chrome / Edge / Brave / Opera на десктопе или Android, через HTTPS или localhost. Инспекция образов работает и здесь.','E-BLE-001: no Web Bluetooth. Use Chrome / Edge / Brave / Opera on desktop or Android over HTTPS or localhost. Image inspection still works here.'],
   noDev:['Устройство не подключено','No device connected'],noImg:['Образ не загружен','No image loaded'],
   verdictNone:['Вердикт — после подключения и загрузки образа','Verdict appears after connecting and loading an image'],
@@ -1119,7 +1207,16 @@ const T={conn:['Подключить','Connect'],disc:['Отключить','Dis
   probeSafety:['Только подключённое устройство. Raw Probe ограничен известными read-only командами; общий скан опкодов и команды записи не отправляются. ACK 9E 0xFF сам по себе не подтверждает исполнение.','Connected device only. Raw Probe is limited to known read-only commands; opcode sweeps and write commands are not sent. A 9E 0xFF ACK alone does not confirm execution.'],
   browseFiles:['Обойти файловые устройства','Browse file devices'],smallFiles:['Список малых файлов','List small files'],
   fetchResources:['Скачать найденное','Fetch listed resources'],exportResources:['Экспорт ZIP','Export ZIP'],
-  otaProbe:['Read-only OTA probe','Read-only OTA probe'],readScreen:['Прочитать экран','Read screen'],
+  otaProbe:['Read-only OTA probe','Read-only OTA probe'],
+  otaApiTitle:['Запрос обновления из облака ZRun / JieLi','Check firmware availability via ZRun / JieLi cloud'],
+  otaApiNote:['Один POST только по явному нажатию. В PHP helper отправляются ID выбранного endpoint и model/version; helper сам формирует SDK-заголовки. authKey и файл прошивки не передаются. Ответ не прошивается автоматически.','One POST per explicit click. The selected endpoint ID and model/version go to the PHP helper, which builds the SDK headers. authKey and firmware files are not sent. Responses are never flashed automatically.'],
+  otaApiEndpoint:['Endpoint','Endpoint'],otaApiModel:['model (не authKey)','model (not authKey)'],otaApiVersion:['Версия устройства','Device version'],
+  otaApiHelper:['URL PHP helper','PHP helper URL'],otaApiToken:['Токен удалённого helper','Remote helper token'],
+  otaApiSend:['Отправить один запрос','Send one request'],
+  otaApiConsent:['Я понимаю, что выбранные model/version будут отправлены выбранному endpoint через PHP helper.','I understand the selected model/version will be sent to the chosen endpoint through the PHP helper.'],
+  otaApiNoSchema:['JieLi URL отключены: формат запроса не подтверждён. Ссылки на APK/репозитории — источники файлов, а не OTA API. Не вводите authKey в поле model. Успешный ответ API не подтверждает совместимость образа; проверяйте его отдельно перед загрузкой в устройство.','JieLi URLs are disabled because their request schema is unverified. APK/repository links are file sources, not OTA APIs. Do not enter authKey as model. An API response does not establish firmware compatibility; validate any image separately before device use.'],
+  otaApiDownload:['Открыть ссылку на файл прошивки','Open firmware download URL'],
+  readScreen:['Прочитать экран','Read screen'],
   readHealth:['Проверить health (заглушка)','Read health (stub)'],syncTime:['Синхронизировать время','Sync time'],
   contentImage:['Изображение для отправки','Image to send'],sendImage:['Отправить изображение','Send image'],
   ok_done:['Прошивка завершена и подтверждена','Flash complete and verified'],meta:['Паспорт собран','Passport captured'],imgOk:['Образ разобран','Image parsed']};
@@ -2010,6 +2107,96 @@ async function watchJlOta(){
   try{await d.watchAdvertisements({signal:ac.signal});toast('слежу за рекламой JLOTA…')}catch(e){toast('adv: '+e.message,'warn')}}
 const wakeHold=async()=>{try{return'wakeLock'in navigator?await navigator.wakeLock.request('screen'):null}catch{return null}};
 
+/* ---- src/protocol/ota-api.js ---- */
+const OTA_API_ENDPOINTS=[
+  {id:'zrun-www-dev',url:'https://www.zgntec.com/hy-cloud/app/dev/upgrade',enabled:true},
+  {id:'zrun-www-prod',url:'https://www.zgntec.com/hy-cloud/app/prod/upgrade',enabled:true},
+  {id:'zrun-www-test',url:'https://www.zgntec.com/hy-cloud/app/test/upgrade',enabled:true},
+  {id:'zrun-www-gray',url:'https://www.zgntec.com/hy-cloud/app/gray/upgrade',enabled:true},
+  {id:'zrun-www-v2',url:'https://www.zgntec.com/hy-cloud/app/v2/upgrade',enabled:true},
+  {id:'zrun-www-prod-upgrade-v2',url:'https://www.zgntec.com/hy-cloud/app/prod/upgrade/v2',enabled:true},
+  {id:'zrun-www-prod-firmware',url:'https://www.zgntec.com/hy-cloud/app/prod/firmware',enabled:true},
+  {id:'zrun-www-prod-ota',url:'https://www.zgntec.com/hy-cloud/app/prod/ota',enabled:true},
+  {id:'zrun-www-prod-version',url:'https://www.zgntec.com/hy-cloud/app/prod/version',enabled:true},
+  {id:'zrun-www-prod-check',url:'https://www.zgntec.com/hy-cloud/app/prod/check',enabled:true},
+  {id:'zrun-www-ota-upgrade',url:'https://www.zgntec.com/hy-cloud/ota/upgrade',enabled:true},
+  {id:'zrun-www-device-upgrade',url:'https://www.zgntec.com/hy-cloud/device/upgrade',enabled:true},
+  {id:'zrun-www-cloud-root',url:'https://www.zgntec.com/hy-cloud/',enabled:true},
+  {id:'zrun-www-root',url:'https://www.zgntec.com/',enabled:true},
+  {id:'zrun-bare-dev',url:'https://zgntec.com/hy-cloud/app/dev/upgrade',enabled:true},
+  {id:'zrun-bare-prod',url:'https://zgntec.com/hy-cloud/app/prod/upgrade',enabled:true},
+  {id:'zrun-bare-test',url:'https://zgntec.com/hy-cloud/app/test/upgrade',enabled:true},
+  {id:'zrun-bare-gray',url:'https://zgntec.com/hy-cloud/app/gray/upgrade',enabled:true},
+  {id:'zrun-bare-v2',url:'https://zgntec.com/hy-cloud/app/v2/upgrade',enabled:true},
+  {id:'zrun-bare-prod-upgrade-v2',url:'https://zgntec.com/hy-cloud/app/prod/upgrade/v2',enabled:true},
+  {id:'zrun-bare-prod-firmware',url:'https://zgntec.com/hy-cloud/app/prod/firmware',enabled:true},
+  {id:'zrun-bare-prod-ota',url:'https://zgntec.com/hy-cloud/app/prod/ota',enabled:true},
+  {id:'zrun-bare-prod-version',url:'https://zgntec.com/hy-cloud/app/prod/version',enabled:true},
+  {id:'zrun-bare-prod-check',url:'https://zgntec.com/hy-cloud/app/prod/check',enabled:true},
+  {id:'zrun-bare-ota-upgrade',url:'https://zgntec.com/hy-cloud/ota/upgrade',enabled:true},
+  {id:'zrun-bare-device-upgrade',url:'https://zgntec.com/hy-cloud/device/upgrade',enabled:true},
+  {id:'zrun-bare-cloud-root',url:'https://zgntec.com/hy-cloud/',enabled:true},
+  {id:'zrun-bare-root',url:'https://zgntec.com/',enabled:true},
+  {id:'jieli-pkgman',url:'https://pkgman.jieliapp.com/',enabled:false},
+  {id:'jieli-cam',url:'https://cam.jieliapp.com/',enabled:false},
+  {id:'jieli-api-ota',url:'https://api.jieliapp.com/ota/upgrade',enabled:false},
+  {id:'jieli-api-firmware',url:'https://api.jieliapp.com/app/firmware',enabled:false},
+  {id:'jieli-open-file',url:'https://open.jieliapp.com/ota/file',enabled:false},
+  {id:'jieli-ota-upgrade',url:'https://ota.jieliapp.com/upgrade',enabled:false},
+  {id:'jieli-www-ota',url:'https://www.zh-jieli.com/api/ota/upgrade',enabled:false},
+  {id:'jieli-www-firmware',url:'https://www.zh-jieli.com/openapi/firmware',enabled:false},
+  {id:'jieli-docs',url:'https://doc.zh-jieli.com/',enabled:false},
+  {id:'jieli-gitlab',url:'https://gitlab.zh-jieli.com/',enabled:false},
+  {id:'jieli-test-docs',url:'https://test03.jieliapp.com/',enabled:false},
+  {id:'jieli-root',url:'https://jieliapp.com/',enabled:false},
+  {id:'source-jieli-ota-apk',url:'https://github.com/Jieli-Tech/Android-JL_OTA/tree/master/apk',enabled:false},
+  {id:'source-jieli-bluetooth-apk',url:'https://github.com/Jieli-Tech/Android-JL_Bluetooth/tree/main/apk',enabled:false},
+  {id:'source-electroniccats-fw',url:'https://github.com/ElectronicCats/jieli-ble-badge-research/tree/main/firmware',enabled:false},
+  {id:'source-ebadge-cli',url:'https://github.com/guan4tou2/ebadge-python-cli',enabled:false},
+  {id:'source-qq-store',url:'https://sj.qq.com/appdetail/com.jieli.otasdk',enabled:false},
+  {id:'source-app-store',url:'https://apps.apple.com/cn/app/id1535431659',enabled:false},
+  {id:'source-play-store',url:'https://play.google.com/store/apps/details?id=com.zijun.zrun',enabled:false}
+];
+const OTA_API_REQUEST={running:false};
+function otaApiEndpoint(id){return OTA_API_ENDPOINTS.find(x=>x.id===id)||null}
+function buildOtaApiRequest(endpointId,model,version){
+  const endpoint=otaApiEndpoint(endpointId);
+  if(!endpoint||!endpoint.enabled)throw new Error('Для этого URL нет подтверждённого формата запроса');
+  const clean=(value,label)=>{const s=String(value||'').trim();if(!/^[\x20-\x7E]{1,80}$/.test(s))throw new Error(`${label}: требуется 1–80 печатных ASCII символов`);return s};
+  const safeModel=clean(model,'model');
+  if(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{16}$/.test(safeModel))throw new Error('model похож на authKey и не будет отправлен');
+  return{endpointId,model:safeModel,version:clean(version,'version')}}
+function normalizeOtaHelperUrl(value){
+  let url;try{url=new URL(String(value||'').trim())}catch{throw new Error('Укажите полный URL PHP-помощника')}
+  const host=url.hostname.toLowerCase(),local=['127.0.0.1','localhost','[::1]','::1'].includes(host);
+  if(url.protocol!=='https:'&&!(url.protocol==='http:'&&local))throw new Error('Удалённый PHP-помощник должен использовать HTTPS');
+  if(url.username||url.password||url.search||url.hash||!url.pathname.endsWith('/ota-helper.php'))throw new Error('URL должен указывать на ota-helper.php без логина, query и fragment');
+  return{url:url.href,remote:!local}}
+async function requestOtaApiCheck({helperUrl,token,endpointId,model,version}){
+  if(OTA_API_REQUEST.running)throw new Error('OTA API-запрос уже выполняется');
+  const target=normalizeOtaHelperUrl(helperUrl),payload=buildOtaApiRequest(endpointId,model,version),secret=String(token||'').trim();
+  if(target.remote&&secret.length<32)throw new Error('Для удалённого helper нужен токен не короче 32 символов');
+  OTA_API_REQUEST.running=true;renderLab();
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+  try{
+    const headers={'Content-Type':'application/json'};
+    if(secret)headers['X-BadgeGuard-Helper-Token']=secret;
+    const response=await fetch(target.url,{method:'POST',headers,body:JSON.stringify(payload),credentials:'omit',
+      cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',signal:controller.signal});
+    const result=await response.json().catch(()=>null);
+    if(!result||typeof result!=='object')throw new Error(`PHP helper вернул не JSON (HTTP ${response.status})`);
+    if(!response.ok||result.ok!==true)throw new Error(result.error||`PHP helper HTTP ${response.status}`);
+    return{...result,endpointId,endpointUrl:otaApiEndpoint(endpointId).url,helperUrl:target.url,model:payload.model,version:payload.version}}
+  catch(e){if(e.name==='AbortError')throw new Error('Таймаут PHP helper (20 с)');throw e}
+  finally{clearTimeout(timer);OTA_API_REQUEST.running=false;renderLab()}}
+function renderOtaApiResult(result){
+  const pre=$('#otaApiResult'),link=$('#otaApiDownload');pre.textContent=JSON.stringify(result,null,2);
+  link.hidden=true;link.removeAttribute('href');
+  const raw=result&&result.response&&result.response.body&&result.response.body.download_address;
+  if(typeof raw==='string'&&raw){try{const url=new URL(raw);if(url.protocol==='https:'){link.href=url.href;link.textContent=url.href;link.hidden=false}}
+    catch(e){log('EV','',null,'OTA API returned invalid download URL: '+e.message)}}
+}
+
 /* ---- src/media/media.js ---- */
 /* ===== media — подготовка контента: JPEG для декодера JieLi + MJPG AVI =====
  * Порт auracast (MIT): sanitizeJpegForBadge + buildMjpgAvi.
@@ -2500,6 +2687,16 @@ function bindLab(){
   action('#btnExportResources',()=>exportResourcesZip());
   action('#btnExportManifest',()=>{if(!S.resManifest)throw new Error('Сначала выполните поиск или выгрузку ресурсов');download('resources-manifest.json',S.resManifest)});
   action('#btnOtaProbe',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');if(labBusy())throw new Error('Другая операция уже выполняется');await otaProbe()});
+  $('#otaApiConsent').addEventListener('change',renderLab);
+  $('#otaApiEndpoint').addEventListener('change',renderLab);
+  $('#btnOtaApiCheck').onclick=async()=>{
+    if(!$('#otaApiConsent').checked)return toast(t('otaApiConsent'),'warn');
+    $('#otaApiResult').textContent='…';$('#otaApiDownload').hidden=true;
+    try{
+      const result=await requestOtaApiCheck({helperUrl:$('#otaApiHelperUrl').value,token:$('#otaApiHelperToken').value,
+        endpointId:$('#otaApiEndpoint').value,model:$('#otaApiModel').value,version:$('#otaApiVersion').value});
+      renderOtaApiResult(result);log('EV','',null,`OTA API request sent to ${result.endpointId}; HTTP ${result.upstreamStatus}`)}
+    catch(e){renderOtaApiResult({ok:false,error:e.message});log('EV','',null,'OTA API request ✕ '+e.message);toast(e.message,'warn')}};
   action('#btnScreen',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');const result=await readScreen();S.labScreen=result;renderLab()});
   action('#btnHealth',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');await readHealth()});
   action('#btnTime',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');await syncTime()});
@@ -2512,9 +2709,12 @@ function renderLab(){
   const active=labBusy(),ready=labConnected();
   for(const id of['#btnRaw','#btnBrowse','#btnSmallList','#btnFetchResources','#btnOtaProbe','#btnScreen','#btnHealth','#btnTime','#btnSendImage'])
     $(id).disabled=!ready||active;
+  $('#btnOtaApiCheck').disabled=!$('#otaApiConsent').checked||OTA_API_REQUEST.running;
   $('#btnExportResources').disabled=!S.res.length;
   $('#btnExportManifest').disabled=!S.resManifest;
   $('#btnExportMatrix').disabled=false;
+  const otaEndpoint=otaApiEndpoint($('#otaApiEndpoint').value);
+  $('#otaApiEndpointUrl').textContent=otaEndpoint?otaEndpoint.url:'—';
   const rows=[
     S.labScreen&&`screen: ${JSON.stringify(S.labScreen)}`,
     S.health&&`health (SDK stub): ${JSON.stringify(S.health)}`,
