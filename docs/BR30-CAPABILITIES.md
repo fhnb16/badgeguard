@@ -25,18 +25,20 @@ The `Q87` advertised-name alias maps to the `e87-ac697x-q87` receiver-mode profi
 
 ## Attribute decoding
 
+- The captured `0x03` target-info body is 123 bytes and parses into 17 TLVs with exact consumption. It does not contain a type-3/platform TLV; `03 05 00 01` is length 3, type 5 (`DEV_VERSION`), data `00 01`. TLV parsing now reports consumed/total bytes and logs malformed tails rather than silently dropping them.
 - `0x03` uses `ATTR_TYPE_*`; `function_info` is a four-byte big-endian audio-function bitfield (`0x4E` means MUSIC, RTC, LINEIN, FM TX). It does not advertise file browsing.
 - Target-info attr 8 (`DOUBLE_PARITION`) is kept distinct from runtime attrs. For captured `[00 01]`, the documented interpretation is single-bank with loader download required.
 - `0x07` uses `COMMON_INFO_ATTR_*`; attr 5 is `FILE_BROWSE_TYPE` and the capture contains ASCII `ALL`.
 - The captured `0x02 GET_TARGET_FEATURE_MAP` returned status `0x02` (unsupported command), so it is omitted from bootstrap. Feature-map decoding remains available for values carried by other attributes.
 - `file_transfer=0x00000007` is recorded as a bitmask only. The bit semantics are not established by the cited vendor SDK.
 - `dev_support_func` and peripheral bit labels remain speculative; raw bytes are preserved.
-- Browse names retain their raw bytes and the header-indicated decode, with an alternate UTF-16LE/byte-string candidate when possible. This is useful because the supplied 12-byte examples have header `0x0A`/`0x0B`, whose bit 1 indicates byte-string rather than UTF-16LE.
-- The `C7` `f5` field is retained as a raw value; its variation has not been shown to represent free storage.
+- Browse names retain their raw bytes and the header-indicated decode, with an alternate UTF-16LE/byte-string candidate when possible. The supplied 12-byte examples have header `0x0A`/`0x0B`, whose bit 1 indicates byte-string rather than UTF-16LE; no Unicode byte order is established for those values.
+- `C7.f5` is logged as a raw value in a per-device passport history and chart. The observed downward trend does not establish whether it counts slots, operations, or anything else.
 
 ## Boundaries
 
-- File browsing is evidenced by the capture. Ordinary file return uses the generic JieLi `0x24` cluster-transfer layout; it remains hardware-unverified on this BR30 and is bounded to 16 MiB per file. Small watch-SDK files still use `0x28`.
+- File browsing is evidenced by the capture. The experimental `0x24` cluster-transfer request currently receives status `0x01` on the reported AC697x files; the exact BR30 file-return layout remains unresolved. It is bounded to 16 MiB per file, and small watch-SDK files still use `0x28`.
+- Resource manifests are scoped to the captured device ID, MAC, profile, and mode. A mode/device change clears stale browse results; `listedEntryCount` includes files and folders, `listedFileCount` counts files, and `count` counts resources actually fetched.
 - The OTA probe sends only `0xE1`, `0xE2`, and `0xE6`; it does not enter update mode or send firmware. In the cited SDK, `0xE2` may return OK regardless of the image, so that reply is not proof that flashing is possible.
 - An observed `0xE5` pull sets the session's `capabilities.rcspOta` for standard mode, but never for Q87 receiver mode. This records observed transport only; the AC697x profile still has `ota:false`, so `0xE5` requests are served only during an explicitly armed, supported OTA transfer and flashing remains gated.
 - Firmware transfer and reboot remain disabled for this AC697x profile; unknown opcode scanning and BLE flash dumping are also disabled.

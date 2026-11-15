@@ -1,5 +1,5 @@
 /* ===== Device tools: bounded, read-only probes and supported RCSP features ===== */
-const labBusy=()=>ACTIVE.includes(S.phase)||PROBE.running||BROWSE.running||OTA.running||CONTENT.running;
+const labBusy=()=>ACTIVE.includes(S.phase)||PROBE.running||BROWSE.running||BROWSE.fetching||OTA.running||CONTENT.running;
 const labConnected=()=>S.conn==='on'&&S.gattReady&&S.P&&S.P.auth.ok;
 
 async function sendLabProbe(){

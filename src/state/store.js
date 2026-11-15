@@ -17,6 +17,6 @@ function loadProfiles(){
 const S={set:{...DEF,...LS('set',{})},allow:LS('allow',{uboot:[],image:[]}),flags:LS('flags',{testMode:false,dump:false,probe:false}),profiles:loadProfiles(),
   dev:null,chars:{},gatt:null,gattReady:false,conn:'off',P:null,R:null,buf:null,dumpPass:null,V:null,path:'qix',phase:'idle',log:[],waiters:[],ac:null,wake:null,
   prog:{done:0,total:0,t0:0,start:0,win:0},abort:false,locked:false,userDisc:false,reconnecting:false,report:null,dumpCert:null,dumpBuf:null,img:null,l0:null,int:null,asyncTests:null,chunkCrc:{ok:0,fail:0},boot:false,quiet:false,battAt:0,maxNotify:{},
-  rawLog:[],scan:[],capMatrix:null,smallFiles:[],res:[],resManifest:null,health:null,otaProbe:null};
+  rawLog:[],scan:[],capMatrix:null,smallFiles:[],smallFilesContextKey:null,res:[],resManifest:null,f5HistoryKey:null,health:null,otaProbe:null};
 const ACTIVE=['preflight','armed','transferring','paused','resuming','applying','rebooting','verifying-marker','verifying-hash','verifying-readback','dumping'];
 const ABORTABLE=['preflight','armed','transferring','paused','resuming','dumping','verifying-readback'];

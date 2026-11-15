@@ -33,7 +33,7 @@ function dispatch(k,u){log('RX',k,u,decode(k,u));sniff(u);onFrame(k,u);rcspRoute
   S.waiters=S.waiters.filter(x=>{if(x.pred(k,u)){x.res({k,u});return false}return true})}
 function onFrame(k,u){if(!S.P)return;
   if(u[0]===0x9E){const f=parse9E(u);if(!f)return;
-    if(f.cmd===0xC7)S.P.display=decodeC7(f.payload);
+    if(f.cmd===0xC7){recordC7(f.payload);render()}
     // push после bootstrap: cmd 0x27 [mode, percent] (qix-ble battery.py); mode 1 ≈ зарядка — не подтверждено, в R-BATT не используем
     else if(f.cmd===0x27&&f.len===2){S.P.battery.level=f.payload[1];S.P.battery.mode=f.payload[0];S.battAt=Date.now();render()}}
   else if(k==='ae02'&&u[0]===0xFE&&u[3]===0xC0&&u[4]===0xE5){
@@ -42,10 +42,17 @@ function onFrame(k,u){if(!S.P)return;
     S.P.capabilities.rcspOta=!receiver;
     log('EV',k,u,`OTA pull request observed${receiver?' in receiver mode':''}; transfer remains gated`);render()}
   else if(isFE(u,0x03)||isFE(u,0x07)){const r=parseRcspResp(u);if(!r||r.status!==0)return;
-    if(r.cmd===0x03){const attrs=parseTlv(r.data),ti=decodeTargetInfo(attrs);S.P.targetInfo=ti;S.P.decoded={...(S.P.decoded||{}),targetInfo:decodeTargetInfo2(attrs)};
+    if(r.cmd===0x03){const tlv=parseTlv(r.data),attrs=tlv.attrs;
+      if(!tlv.ok)log('EV',k,null,`ERROR target_info TLV: ${tlv.error}; consumed=${tlv.consumed}/${tlv.total}, trailing=${hex(tlv.trailing,'')}`);
+      const ti=decodeTargetInfo(attrs),decoded=decodeTargetInfo2(attrs);
+      decoded.parse={consumed:tlv.consumed,total:tlv.total,ok:tlv.ok,error:tlv.error};
+      S.P.targetInfo=ti;S.P.decoded={...(S.P.decoded||{}),targetInfo:decoded};
       if(ti.edr_addr)S.P.mac=ti.edr_addr;if(ti.fw_version&&!S.P.fwVersion)S.P.fwVersion=ti.fw_version}
-    else{const attrs=parseTlv(r.data.subarray(1));S.P.sysInfo=Object.fromEntries(attrs.map(a=>['attr_'+a.type,hex(a.data,'')]));
-      S.P.decoded={...(S.P.decoded||{}),sysInfo:decodeSysInfo2(attrs)}}render()}}
+    else{const tlv=parseTlv(r.data.subarray(1)),attrs=tlv.attrs;
+      if(!tlv.ok)log('EV',k,null,`ERROR sys_info TLV: ${tlv.error}; consumed=${tlv.consumed}/${tlv.total}, trailing=${hex(tlv.trailing,'')}`);
+      S.P.sysInfo=Object.fromEntries(attrs.map(a=>['attr_'+a.type,hex(a.data,'')]));
+      const decoded=decodeSysInfo2(attrs);decoded.parse={consumed:tlv.consumed,total:tlv.total,ok:tlv.ok,error:tlv.error};
+      S.P.decoded={...(S.P.decoded||{}),sysInfo:decoded}}render()}}
 function sniff(u){if(!S.P)return;const s=ascii(u),sdk=s.match(/jl_sdk_ac\w+/),ver=s.match(/\d+\.\d+\.\d+\.\d+\.\d+/);
   if(sdk)S.P.sdkString=sdk[0];if(ver)S.P.fwVersion=ver[0];if(/BADGE-FWMARK/.test(s))S.P.bootMarker=true}
 

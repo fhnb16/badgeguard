@@ -1,7 +1,7 @@
 /* ===== i18n ===== */
 const T={conn:['Подключить','Connect'],disc:['Отключить','Disconnect'],connAll:['Все устройства','All devices'],
   st_off:['нет связи','offline'],st_connecting:['подключение…','connecting…'],st_on:['на связи','connected'],
-  passport:['Паспорт устройства','Device passport'],image:['Образ и вердикт','Image & verdict'],flash:['Прошивка','Flashing'],settings:['Настройки','Settings'],
+  passport:['Паспорт устройства','Device passport'],f5History:['f5 — история сырых значений','f5 — raw value history'],image:['Образ и вердикт','Image & verdict'],flash:['Прошивка','Flashing'],settings:['Настройки','Settings'],
   rescan:['Перечитать','Re-read'],copy:['Копировать','Copy'],gatt:['GATT-карта','GATT map'],
   drop:['Перетащите .ufw / .bin или нажмите (≤ 16 МБ). Файл не покидает устройство.','Drop .ufw / .bin or click (≤ 16 MB). The file never leaves this device.'],
   dumpPass:['Паспорт дампа (.json) для restore:','Dump passport (.json) for restore:'],path:['Путь OTA','OTA path'],

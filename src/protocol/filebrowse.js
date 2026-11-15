@@ -4,7 +4,21 @@
  *   ответы: 0x0C status, затем пуши 0x01 (xmOp=0x0C) с записями, финал 0x0D → ОБЯЗАТЕЛЬНО ACK.
  * Малые файлы: 0x28 op=0 (список по типу), op=1 (чтение id/offset/len).
  */
-const BROWSE={running:false,tree:[],files:[],manifest:null,lastError:null};
+const BROWSE={running:false,fetching:false,tree:[],files:[],manifest:null,lastError:null,context:null,contextKey:null};
+function browseContext(){
+  const P=S.P||{},name=P.advertisedName||P.name||S.dev&&S.dev.name||null;
+  return{deviceId:P.deviceId||S.dev&&S.dev.id||null,profileId:P.profileId||null,mode:P.mode||(/^Q87/i.test(name||'')?'receiver':'standard'),
+    name,mac:P.mac||null,fwVersion:P.fwVersion||null,chipFamily:P.chipFamily||null}}
+const browseContextKey=c=>JSON.stringify([c.profileId,c.mode,c.mac,c.deviceId,c.name]);
+const currentBrowseContextKey=()=>browseContextKey(browseContext());
+function useBrowseContext(context,key){
+  if(BROWSE.contextKey&&BROWSE.contextKey!==key){
+    BROWSE.tree=[];BROWSE.files=[];BROWSE.manifest=null;
+    S.smallFiles=[];S.smallFilesContextKey=null;S.res=[];S.resManifest=null}
+  BROWSE.context=context;BROWSE.contextKey=key}
+function requireBrowseContext(key){
+  if(!key||key!==currentBrowseContextKey()){
+    const e=new Error('browse belongs to another device or mode; run browse again');e.code='E-BROWSE-CONTEXT';throw e}}
 const browseParam=(o)=>{
   const path=bytesOf((o.clusters||[]).flatMap(c=>[(c>>>24)&255,(c>>>16)&255,(c>>>8)&255,c&255]));
   const pl=path.length,le=o.pathLenLE!==false; // capture: LE; SDK-комментарий: BE — переключаемо, авто-ретрай
@@ -33,7 +47,10 @@ async function browseOnce(o){
 // Обход всех устройств (USB/SD0/SD1/Flash) + рекурсия по папкам
 async function browseAll({deep=true,maxDepth=3,readNum=32}={}){
   if(BROWSE.running)throw new Error('browse уже идёт');
+  const context=browseContext(),contextKey=browseContextKey(context);
+  useBrowseContext(context,contextKey);
   BROWSE.running=true;S.abort=false;BROWSE.tree=[];BROWSE.files=[];BROWSE.lastError=null;
+  BROWSE.manifest=null;S.res=[];S.resManifest=null;
   const t0=Date.now();
   try{
     for(const dev of DEV_LIST){
@@ -67,6 +84,10 @@ async function browseAll({deep=true,maxDepth=3,readNum=32}={}){
 
 /* Малые файлы 0x28 — реально работающий путь чтения ресурсов на watch-SDK */
 async function listSmallFiles(){
+  const context=browseContext(),contextKey=browseContextKey(context);
+  useBrowseContext(context,contextKey);
+  if(S.smallFilesContextKey&&S.smallFilesContextKey!==contextKey){S.smallFiles=[];S.res=[];S.resManifest=null}
+  S.smallFilesContextKey=contextKey;
   const out=[];
   for(const t of SMALL_FILE_TYPES){
     if(S.abort)break;
@@ -97,6 +118,7 @@ function browseReadQueue(){
 
 async function readBrowseFile(e){
   if(!S.P||!S.P.auth.ok||S.conn!=='on'||!S.gattReady)throw new Error('нужна подключённая авторизованная сессия');
+  requireBrowseContext(BROWSE.contextKey);
   const dev=e.devHandler??e.dev,cluster=e.cluster;
   if(!Number.isInteger(dev)||!DEV_HANDLERS[dev])throw new Error('неизвестный файловый дескриптор');
   if(!Number.isInteger(cluster)||cluster<0||cluster>0xFFFFFFFF)throw new Error('неверный cluster файла');
@@ -106,14 +128,16 @@ async function readBrowseFile(e){
       (cluster>>>24)&255,(cluster>>>16)&255,(cluster>>>8)&255,cluster&255);
     const r=await rcspCmd(0x24,body,S.set.reqTo,{note:`file return ${e.path||e.name} cluster=${hx(cluster)}`});
     if(r.kind==='timeout')return{ok:false,error:'timeout',data:new Uint8Array(0)};
-    if(r.status!==0)return{ok:false,error:'RCSP '+statusName(r.status),data:new Uint8Array(0)};
+    if(r.status!==0)return{ok:false,error:`RCSP status ${hx(r.status)} (${statusName(r.status)})`,status:r.status,data:new Uint8Array(0)};
     if(!r.payload||r.payload.length<5||r.payload[0]!==0x01)return{ok:false,error:'unexpected 0x24 size response',data:new Uint8Array(0)};
     const size=be32(r.payload,1);
     if(size>MAX_BROWSE_FILE_BYTES)return{ok:false,error:`file exceeds ${MAX_BROWSE_FILE_BYTES} byte limit`,data:new Uint8Array(0)};
     const data=new Uint8Array(size);let offset=0,crc=0;
     for(;;){
       if(S.abort)return{ok:false,error:'aborted',data:new Uint8Array(0)};
+      requireBrowseContext(BROWSE.contextKey);
       const item=await Q.next(Math.max(10000,S.set.browseTo));
+      requireBrowseContext(BROWSE.contextKey);
       if(!item)return{ok:false,error:'transfer timeout',data:new Uint8Array(0)};
       if(item.kind==='finish'){
         if(offset!==size)return{ok:false,error:`incomplete transfer (${offset}/${size})`,data:new Uint8Array(0)};
@@ -127,35 +151,47 @@ async function readBrowseFile(e){
       data.set(chunk,offset);offset+=chunk.length;crc=nextCrc}
   }finally{Q.un()}}
 
-/* Выгрузка: browse-файлы возвращаются по cluster через 0x24, watch-файлы — через 0x28. */
+/* Выгрузка: browse-файлы пробуются через экспериментальный 0x24; watch-файлы — через 0x28. */
 async function fetchResources({limit=0}={}){
+  if(BROWSE.files.length)requireBrowseContext(BROWSE.contextKey);
+  if(S.smallFiles.length)requireBrowseContext(S.smallFilesContextKey);
   if(!BROWSE.files.length&&!S.smallFiles.length)throw new Error('сначала выполните обход (browse / small files)');
   const targets=[...BROWSE.files.map(f=>({id:f.id,type:1,typeName:'file',name:f.path,size:f.size,cluster:f.cluster,devHandler:f.dev,
       nameHex:f.nameHex,nameEncoding:f.nameEncoding,nameAlternate:f.nameAlternate,nameAlternateEncoding:f.nameAlternateEncoding,src:'browse'})),
     ...S.smallFiles.map(f=>({id:f.id,type:f.type,typeName:f.typeName,name:`${f.typeName}/${f.id}.bin`,size:f.size,src:'0x28'}))];
   const list=limit?targets.slice(0,limit):targets;
+  if(BROWSE.fetching)throw new Error('resource fetch уже идёт');
   S.res=[];S.abort=false;S.prog={done:0,total:list.length,t0:performance.now(),start:0,win:0};
-  for(const t of list){
-    if(S.abort)break;
-    try{const r=t.src==='browse'?await readBrowseFile(t):await readSmallFile(t);
-      if(r.ok&&r.data.length){const sha=await sha256hex(r.data);
-        S.res.push({...t,bytes:r.data.length,sha256:sha,crc16:r.crc16,crcOk:r.crc16!=null?crc16(r.data)===r.crc16:null,data:r.data,variant:r.variant});
-        log('EV','',null,`fs get ${t.name}: ${r.data.length} Б sha256=${sha.slice(0,12)}… crc=${hx(r.crc16)}`)}
-      else log('EV','',null,`fs get ${t.name}: ${r.error||'пусто'}`)}
-    catch(e){log('EV','',null,`fs get ${t.name}: ${e.message}`)}
-    S.prog.done++;renderLab()}
-  S.resManifest=await buildResourcesManifest();
-  toast(`ресурсов: ${S.res.length}/${list.length}`,S.res.length?'ok':'warn');renderLab();return S.res}
+  BROWSE.fetching=true;render();
+  try{
+    for(const t of list){
+      if(S.abort)break;
+      if(t.src==='browse')requireBrowseContext(BROWSE.contextKey);
+      else requireBrowseContext(S.smallFilesContextKey);
+      try{const r=t.src==='browse'?await readBrowseFile(t):await readSmallFile(t);
+        if(r.ok&&r.data.length){const sha=await sha256hex(r.data);
+          S.res.push({...t,bytes:r.data.length,sha256:sha,crc16:r.crc16,crcOk:r.crc16!=null?crc16(r.data)===r.crc16:null,data:r.data,variant:r.variant});
+          log('EV','',null,`fs get ${t.name}: ${r.data.length} Б sha256=${sha.slice(0,12)}… crc=${hx(r.crc16)}`)}
+        else log('EV','',null,`fs get ${t.name}: ${r.error||'пусто'}`)}
+      catch(e){log('EV','',null,`fs get ${t.name}: ${e.message}`);if(e.code==='E-BROWSE-CONTEXT')throw e}
+      S.prog.done++;renderLab()}
+    S.resManifest=await buildResourcesManifest();
+    toast(`ресурсов: ${S.res.length}/${list.length}`,S.res.length?'ok':'warn');return S.res}
+  finally{BROWSE.fetching=false;render()}}
 
 async function buildResourcesManifest(){
   const items=[];
   for(const r of S.res||[])items.push({name:r.name,path:r.name,source:r.src,type:r.type,id:r.id,cluster:r.cluster??null,
     nameHex:r.nameHex??null,nameEncoding:r.nameEncoding??null,nameAlternate:r.nameAlternate??null,nameAlternateEncoding:r.nameAlternateEncoding??null,
     bytes:r.bytes,sha256:r.sha256,crc16:r.crc16==null?null:hx(r.crc16),crcVerified:r.crcOk});
+  const countChildren=nodes=>nodes.reduce((n,c)=>n+1+c.files.length+countChildren(c.children),0);
+  const listedEntryCount=BROWSE.tree.reduce((n,r)=>n+r.files.length+countChildren(r.children),0);
   return{artifact:'resources-manifest.json',generatedAt:new Date().toISOString(),
-    device:S.P?{deviceId:S.P.deviceId,name:S.P.name,fwVersion:S.P.fwVersion,profileId:S.P.profileId,chipFamily:S.P.chipFamily}:null,
-    transport:'RCSP AE00 (0x0C browse + 0x24 cluster return + 0x28 small-file read)',
+    device:BROWSE.context,
+    transport:'RCSP AE00 (0x0C browse + experimental 0x24 cluster return + 0x28 small-file read)',
     note:'ресурсы прошивки (циферблаты/картинки/шрифты/конфиги). Код прошивки, uboot и chipkey этим путём НЕ доступны.',
+    listedEntryCount,
+    listedFileCount:BROWSE.files.length,
     browseTree:BROWSE.tree.map(n=>({dev:n.devName,ok:n.ok,reason:n.reason,files:n.files.map(f=>({path:f.path,id:f.id,cluster:f.cluster,nameHex:f.nameHex,nameEncoding:f.nameEncoding,
         nameAlternate:f.nameAlternate,nameAlternateEncoding:f.nameAlternateEncoding})),
       children:n.children.map(c=>({path:c.path,cluster:c.cluster,nameHex:c.nameHex,nameEncoding:c.nameEncoding,nameAlternate:c.nameAlternate,

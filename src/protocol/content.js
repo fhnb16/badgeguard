@@ -108,12 +108,14 @@ async function syncTime(d=new Date()){
 // Экран: C6 → C7
 async function readScreen(){
   const r=await qreq(0xC6,[1],S.set.reqTo,{flags:0x0B,expect:0xC7}).catch(()=>null);
-  if(!r)return null;const d=decodeC7(r.payload);if(d&&S.P){S.P.display=d;render()}return d}
+  if(!r)return null;const d=recordC7(r.payload);if(d&&S.P)render();return d}
 // Яркость: чтение через 0x07 attr7 (COMMON_INFO_ATTR_LIGHT), запись — 9E 0x20 [0x16,0x01,0x00,level]
 async function readBrightness(){
   const r=await rcspCmd(0x07,[0x00,0,0,0,0x80],S.set.reqTo,{note:'sys_info light (attr 7)'});
   if(r.kind!=='fe-response'||r.status!==0)return null;
-  const a=parseTlv((r.payload||new Uint8Array(0)).subarray(1)).find(x=>x.type===7);
+  const tlv=parseTlv((r.payload||new Uint8Array(0)).subarray(1));
+  if(!tlv.ok)log('EV','ae02',null,`ERROR brightness TLV: ${tlv.error}; consumed=${tlv.consumed}/${tlv.total}`);
+  const a=tlv.attrs.find(x=>x.type===7);
   return a&&a.data.length?a.data[0]:null}
 async function setBrightness(level){
   const v=Math.max(0,Math.min(100,Math.round(level)));

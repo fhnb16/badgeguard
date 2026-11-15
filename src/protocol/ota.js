@@ -170,7 +170,9 @@ async function otaRelink(){
 async function otaIsLoader(){
   const r=await rcspCmd(0x03,[0xFF,0xFF,0xFF,0xFF,0x00],S.set.reqTo,{note:'OTA 0x03 (loader check)'});
   if(r.kind!=='fe-response')return null;
-  const a=parseTlv(r.payload||new Uint8Array(0)).find(x=>x.type===9);
+  const tlv=parseTlv(r.payload||new Uint8Array(0));
+  if(!tlv.ok)log('EV','ae02',null,`ERROR loader target_info TLV: ${tlv.error}; consumed=${tlv.consumed}/${tlv.total}`);
+  const a=tlv.attrs.find(x=>x.type===9);
   return a&&a.data.length?a.data[0]===1:null}
 // Наблюдение за рекламой JLOTA (Chrome: watchAdvertisements, может быть недоступен)
 async function watchJlOta(){

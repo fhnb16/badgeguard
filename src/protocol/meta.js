@@ -16,12 +16,12 @@ async function bootstrapFull(ms){const r={},rc=c=>ackOk(waitFor((k,u)=>k==='ae02
   return r}
 async function collectMeta(){
   const t0=Date.now(),left=()=>Math.max(300,Math.min(S.set.reqTo,12000-(Date.now()-t0)));
-  S.boot=false;
+  S.boot=false;S.f5HistoryKey=null;
   S.P={deviceId:S.dev.id,name:S.dev.name||null,advertisedName:S.dev.name||null,chipFamily:'unknown',sdkString:null,fwVersion:null,productName:null,battery:{level:null,charging:null,mode:null},gatt:S.gatt,
     capabilities:{qixFd00:!!S.chars.fd00,rcspOta:false,rcspOtaProbe:false,rcspOtaObserved:false,
       rcspTransport:!!(S.chars.ae01&&S.chars.ae02),batteryService:!!S.chars['2a19']},auth:{ok:false,keyProfile:null},
     testModeSuspected:!!S.flags.testMode,profileId:null,capturedAt:null,bootMarker:false,display:null,mac:null,targetInfo:null,sysInfo:null,decoded:null,
-    unsupported:[],transport:{rcsp:!!(S.chars.ae01&&S.chars.ae02),sideband:!!(S.chars.fd01&&S.chars.fd02&&S.chars.fd03),qixFd00:!!S.chars.fd00},
+    f5History:[],unsupported:[],transport:{rcsp:!!(S.chars.ae01&&S.chars.ae02),sideband:!!(S.chars.fd01&&S.chars.fd02&&S.chars.fd03),qixFd00:!!S.chars.fd00},
     variant:null,charIds:Object.keys(S.chars).sort()};
   render();
   const step=async(n,f,force)=>{if(!force&&Date.now()-t0>12000)return log('EV','',null,n+': skipped (budget)');try{await f()}catch(e){log('EV','',null,`${n}: ${e.message}`)}};
@@ -49,5 +49,5 @@ async function collectMeta(){
   S.P.authProfile=S.P.auth.keyProfile;
   S.P.transport={...S.P.transport,...(profile&&profile.transport||{})};
   if(profile){S.P.chip=profile.chip||null;S.P.family=profile.family||S.P.chipFamily;S.P.sdk=profile.sdk||S.P.sdkString}
-  S.P.maxNotify={...S.maxNotify};S.P.capturedAt=new Date().toISOString();
+  S.P.maxNotify={...S.maxNotify};S.P.capturedAt=new Date().toISOString();bindF5History();
   log('EV','',null,`passport ${Date.now()-t0} ms, auth=${S.P.auth.ok} boot=${S.boot} profile=${S.P.profileId}`);idb('passports',S.P);toast(t('meta'),S.P.profileId?'ok':'warn');render()}

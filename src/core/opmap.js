@@ -7,6 +7,7 @@ const OP_BY_CODE=Object.fromEntries(OP_ALL.map(o=>[o.code_int,o]));
 const opInfo=c=>OP_BY_CODE[c&255]||null;
 const opName=c=>{const o=opInfo(c);return o?(o.name||o.sdk_name):'UNKNOWN_'+hx(c)};
 const ATTR_TI=Object.fromEntries(Object.entries(RCSP_REF.attr_types_target_info).map(([k,v])=>[parseInt(k),v]));
+ATTR_TI[5]='ATTR_TYPE_DEV_VERSION';
 const ATTR_CI=Object.fromEntries(Object.entries(RCSP_REF.attr_types_common_info).map(([k,v])=>[parseInt(k),v]));
 // JL_PRO_STATUS — вендорский enum. Апстрим-TS (auracast) врёт начиная с 0x02, см. data/bitfields.md §8.
 const RCSP_STATUS=Object.fromEntries(Object.entries(RCSP_REF.status_codes.authoritative_sdk).map(([k,v])=>[parseInt(k),v.replace('JL_PRO_STATUS_','')]));

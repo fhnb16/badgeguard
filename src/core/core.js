@@ -36,8 +36,17 @@ function feTake(b){if(b.length<7)return{frame:null,rest:b};if(!(b[0]===0xFE&&b[1
   const tot=8+(b[5]<<8|b[6]);if(tot>8192)return{frame:b,rest:new Uint8Array(0)};if(b.length<tot)return{frame:null,rest:b};
   return b[tot-1]===0xEF?{frame:b.slice(0,tot),rest:b.slice(tot)}:{frame:b,rest:new Uint8Array(0)}}
 const parseRcspResp=u=>{const len=u[5]<<8|u[6],body=u.subarray(7,7+len);return body.length<2?null:{flag:u[3],cmd:u[4],status:body[0],sn:body[1],data:body.subarray(2)}};
-const parseTlv=p=>{const out=[];for(let i=0;i<p.length;){const n=p[i];if(n<1||i+1+n>p.length)break;out.push({type:p[i+1],data:p.slice(i+2,i+1+n)});i+=1+n}return out};
-const TI_NAMES={0:'protocol_version',1:'power_up_sys_info',2:'edr_addr',3:'platform',4:'function_info',5:'firmware_info',6:'sdk_type',7:'uboot_version',8:'support_double_backup',
+const parseTlv=p=>{
+  const attrs=[];let consumed=0,error=null;
+  while(consumed<p.length){
+    const len=p[consumed];
+    if(len<2){error=`length ${len} at offset ${consumed} is less than 2`;break}
+    const end=consumed+1+len;
+    if(end>p.length){error=`attribute at offset ${consumed} exceeds body`;break}
+    attrs.push({type:p[consumed+1],data:p.slice(consumed+2,end),tlvLength:len});
+    consumed=end}
+  return{attrs,consumed,total:p.length,ok:consumed===p.length,error,trailing:p.slice(consumed)}};
+const TI_NAMES={0:'protocol_version',1:'power_up_sys_info',2:'edr_addr',3:'platform',4:'function_info',5:'dev_version',6:'sdk_type',7:'uboot_version',8:'support_double_backup',
   9:'mandatory_upgrade_flag',10:'vid_pid',11:'auth_key',12:'project_code',13:'fw_version',14:'allow_connect',16:'name',17:'ble_addr',18:'peripherals_support',19:'dev_support_func',21:'file_transfer',31:'custom_ver'};
 const mac6=d=>hex(d.subarray(0,6),':').toLowerCase(); // порядок байт как в кадре; сверить с адресом в ОС
 // HIL E87: attr 2 = 8 Б (адрес + 2 Б), attr 17 = 7 Б (тип + адрес; qix-ble зовёт его connect_ble_only)
@@ -48,6 +57,32 @@ function decodeTargetInfo(attrs){const o={};for(const{type,data}of attrs){const 
 const GENERIC4M={family:'unknown',flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000}};
 // C7 (ответ на C6), 13 B, u16 BE. 360×360 совпадает с панелью из ТЗ; назначение w2/h2 (368) и f5..f7 не подтверждено
 function decodeC7(p){if(!p||p.length<13)return null;const b=o=>p[o]<<8|p[o+1];return{width:b(0),height:b(2),w2:b(4),h2:b(6),f5:b(8),f6:p[10],f7:b(11)}}
+const F5_HISTORY_LIMIT=512;
+function f5HistoryKey(P){
+  if(!P)return null;
+  const device=P.mac||P.deviceId||P.advertisedName||P.name;
+  return device?`f5History.${encodeURIComponent(`${P.mode||'standard'}:${device}`)}`:null}
+function validF5History(value){
+  return Array.isArray(value)?value.filter(x=>x&&typeof x.ts==='string'&&Number.isFinite(x.value)).slice(-F5_HISTORY_LIMIT):[]}
+function saveF5History(key,history){
+  try{localStorage.setItem('bg.'+key,JSON.stringify(history))}
+  catch(e){log('EV','',null,`ERROR saving f5 history: ${e.message}`)}}
+function bindF5History(){
+  const key=f5HistoryKey(S.P);if(!key)return;
+  let prior=[];
+  try{const raw=localStorage.getItem('bg.'+key);prior=raw==null?[]:validF5History(JSON.parse(raw))}
+  catch(e){log('EV','',null,`ERROR loading f5 history: ${e.message}`)}
+  const current=validF5History(S.P.f5History);
+  S.P.f5History=[...prior,...current].sort((a,b)=>a.ts.localeCompare(b.ts)).slice(-F5_HISTORY_LIMIT);
+  S.f5HistoryKey=key;saveF5History(key,S.P.f5History)}
+function recordC7(payload){
+  const display=decodeC7(payload);if(!display||!S.P)return display;
+  S.P.display=display;
+  if(Number.isFinite(display.f5)){
+    const sample={ts:new Date().toISOString(),value:display.f5};
+    S.P.f5History=[...validF5History(S.P.f5History),sample].slice(-F5_HISTORY_LIMIT);
+    if(S.f5HistoryKey)saveF5History(S.f5HistoryKey,S.P.f5History)}
+  return display}
 const profileForSdk=(sdk,profiles)=>sdk?Object.keys(profiles).find(id=>new RegExp(profiles[id].match.sdkRegex).test(sdk))||null:null;
 // >0 upgrade, 0 same, <0 downgrade, null = unknown / different line
 function vcmp(a,b){if(!a||!b)return null;const x=a.split('.').map(Number),y=b.split('.').map(Number);if(x[0]!==y[0]||x[1]!==y[1])return null;
@@ -122,9 +157,17 @@ function selfTest(){
   const q2=qixTake(Uint8Array.of(...q.rest,...full.subarray(10)));ok('qixTake: garbage + fragmented frame → 1 frame',!q.frame&&q.skipped===2&&!!q2.frame&&eq(q2.frame,full));
   const ti=fromHex('fe dc ba c0 03 00 06 74 ff ff ff ff 00 ef');let f1=feTake(ti.subarray(0,9)),f2=feTake(Uint8Array.of(...f1.rest,...ti.subarray(9)));
   ok('feTake: fragmented RCSP frame (btsnoop GetTargetInfo)',!f1.frame&&!!f2.frame&&eq(f2.frame,ti));
-  const tlv=decodeTargetInfo(parseTlv(Uint8Array.of(5,16,116,101,115,116,7,2,0x12,0x34,0x56,0x78,0x9a,0xbc,5,10,0x05,0xb9,0xab,0xcd,5,13,1,16,2,28)));
+  const parsedTlv=parseTlv(Uint8Array.of(5,16,116,101,115,116,7,2,0x12,0x34,0x56,0x78,0x9a,0xbc,5,10,0x05,0xb9,0xab,0xcd,5,13,1,16,2,28));
+  const tlv=decodeTargetInfo(parsedTlv.attrs);
+  ok('TLV parser reports exact consumption',parsedTlv.ok&&parsedTlv.consumed===parsedTlv.total);
   ok('target_info TLV: name / MAC / vid_pid / fw',tlv.name==='test'&&tlv.edr_addr==='12:34:56:78:9a:bc'&&tlv.vid_pid==='vid=0x5B9 pid=0xABCD'&&tlv.fw_version==='1.16.2.28');
-  const real=parseRcspResp(fromHex('FE DC BA 00 03 00 7D 00 01 02 00 20 05 01 00 00 00 00 09 02 46 88 00 02 09 DC 0E 00 07 04 00 00 00 04 00 00 03 05 00 01 02 06 0D 03 07 31 30 05 08 00 01 01 00 04 09 00 00 00 05 0A 00 02 00 8B 11 0B 68 45 39 79 66 73 65 58 36 55 64 4B 37 72 46 68 15 0C 6A 6C 5F 73 64 6B 5F 61 63 36 39 37 5F 70 75 62 6C 69 73 68 05 0D 01 10 02 1C 08 11 00 46 88 00 02 09 DC 02 12 00 03 13 04 04 05 15 00 00 00 07 EF')),rt=real&&decodeTargetInfo(parseTlv(real.data));
+  const real=parseRcspResp(fromHex('FE DC BA 00 03 00 7D 00 01 02 00 20 05 01 00 00 00 00 09 02 46 88 00 02 09 DC 0E 00 07 04 00 00 00 04 00 00 03 05 00 01 02 06 0D 03 07 31 30 05 08 00 01 01 00 04 09 00 00 00 05 0A 00 02 00 8B 11 0B 68 45 39 79 66 73 65 58 36 55 64 4B 37 72 46 68 15 0C 6A 6C 5F 73 64 6B 5F 61 63 36 39 37 5F 70 75 62 6C 69 73 68 05 0D 01 10 02 1C 08 11 00 46 88 00 02 09 DC 02 12 00 03 13 04 04 05 15 00 00 00 07 EF'));
+  const realTlv=real&&parseTlv(real.data),rt=realTlv&&decodeTargetInfo(realTlv.attrs);
+  ok('target_info TLV capture: 17 entries, 123 bytes consumed; platform attr absent from raw frame',
+    !!realTlv&&realTlv.ok&&realTlv.consumed===123&&realTlv.total===123&&realTlv.attrs.length===17&&!realTlv.attrs.some(a=>a.type===3));
+  ok('target_info type 5 is DEV_VERSION, value 0001',!!realTlv&&realTlv.attrs.some(a=>a.type===5&&hex(a.data,'')==='0001')&&ATTR_TI[5]==='ATTR_TYPE_DEV_VERSION');
+  const brokenTlv=parseTlv(Uint8Array.of(3,5,0,1,0xFF));
+  ok('TLV parser reports malformed trailing byte',!brokenTlv.ok&&brokenTlv.consumed===4&&brokenTlv.trailing.length===1);
   ok('target_info from real E87: ac697 / 1.16.2.28 / MAC / auth_key hidden',!!rt&&real.status===0&&rt.project_code==='jl_sdk_ac697_publish'&&rt.fw_version==='1.16.2.28'&&rt.edr_addr.startsWith('46:88:00:02:09:dc')&&rt.ble_addr==='type 0 46:88:00:02:09:dc'&&!/hE9y/.test(JSON.stringify(rt))&&rt.protocol_version==='32'&&rt.uboot_version==='10');
   const fi=decodeFunctionInfo(Uint8Array.of(0,0,0,0x4E)),dp=decodeDoublePartition(Uint8Array.of(0,1));
   ok('bitfields: function_info 0x4E = MUSIC/RTC/LINEIN/FMTX; no filebrowse bit',fi.names.join(',')==='MUSIC,RTC,LINEIN,FMTX');

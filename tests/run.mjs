@@ -32,8 +32,25 @@ res.push(await vm.runInThisContext(`(async()=>{
   }catch(e){return{n:'OTA pull queue captures E5 before transfer loop starts',ok:false,error:e.message}}
   finally{queue.un();if(savedS===undefined)delete globalThis.S;else globalThis.S=savedS}
 })()`));
+res.push(...vm.runInThisContext(`(()=>{
+  const saved={S:globalThis.S,localStorage:globalThis.localStorage,log:globalThis.log},store=new Map();
+  try{
+    globalThis.S={P:{deviceId:'q87-device',profileId:'e87-ac697x-q87',mode:'receiver',mac:'47:89:00:02:09:dc',f5History:[]},f5HistoryKey:null};
+    globalThis.localStorage={getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,v)};
+    globalThis.log=()=>{};
+    const first=Uint8Array.of(1,0x68,1,0x68,1,0x70,1,0x70,1,0xF4,0x10,0,0);
+    const next=Uint8Array.of(1,0x68,1,0x68,1,0x70,1,0x70,1,0xD0,0x10,0,0);
+    recordC7(first);bindF5History();recordC7(next);
+    const key=f5HistoryKey(S.P),e87Key=f5HistoryKey({...S.P,mode:'standard',mac:'46:88:00:02:09:dc'});
+    const savedHistory=JSON.parse(store.get('bg.'+key));
+    return[{n:'C7 f5 history persists per mode/device without inferring meaning',
+      ok:S.P.display.f5===464&&S.P.f5History.length===2&&S.P.f5History[0].value===500&&
+        S.P.f5History[1].value===464&&savedHistory.length===2&&key.includes('receiver')&&key!==e87Key}]
+  }catch(e){return[{n:'C7 f5 history persists per mode/device without inferring meaning',ok:false,error:e.message}]}
+  finally{for(const k of['S','localStorage','log'])if(saved[k]===undefined)delete globalThis[k];else globalThis[k]=saved[k]}
+})()`));
 res.push(await vm.runInThisContext(`(async()=>{
-  const saved={browseOnce,renderLab:globalThis.renderLab,log:globalThis.log,S:globalThis.S};
+  const saved={browseOnce,renderLab:globalThis.renderLab,log:globalThis.log,S:globalThis.S,context:BROWSE.context,contextKey:BROWSE.contextKey,manifest:BROWSE.manifest};
   const calls=[];
   try{
     globalThis.S={abort:false,res:[],smallFiles:[],P:null};
@@ -41,42 +58,54 @@ res.push(await vm.runInThisContext(`(async()=>{
     globalThis.log=()=>{};
     browseOnce=async o=>{
       calls.push(o);
-      const entries=o.devHandler===2&&o.type===0?[{name:'BAG',isFile:false,cluster:7,devIndex:2}]:
+      const entries=o.devHandler===2&&o.type===0?[{name:'test-dir',isFile:false,cluster:7,devIndex:2}]:
         o.devHandler===2&&o.type===1?[{name:'image.bin',isFile:true,cluster:9,devIndex:2,id:3}]:[];
       return{...o,ok:true,entries,pushes:entries.length,bytes:0}
     };
     const result=await browseAll({deep:true,maxDepth:3});
-    return{n:'browse walker retains device handler and discovered files',ok:result.files.length===1&&result.files[0].dev===2&&
-      result.files[0].path==='BAG/image.bin'&&calls.some(x=>x.type===1&&x.devHandler===2)&&globalThis.S.resManifest===result.manifest}
-  }catch(e){return{n:'browse walker retains device handler and discovered files',ok:false,error:e.message}}
+    const listed={file:result.files[0],count:result.manifest.listedFileCount,entryCount:result.manifest.listedEntryCount,fileCount:result.files.length};
+    const e87=browseContextKey({profileId:'e87-ac697x',mode:'standard',mac:'46:88:00:02:09:dc',deviceId:'e87',name:'E87'});
+    const q87Context={profileId:'e87-ac697x-q87',mode:'receiver',mac:'47:89:00:02:09:dc',deviceId:'q87',name:'Q87'};
+    const q87=browseContextKey(q87Context);useBrowseContext(q87Context,q87);
+    return{n:'browse walker retains handler and isolates E87/Q87 manifests',ok:listed.fileCount===1&&listed.file.dev===2&&
+      listed.file.path==='test-dir/image.bin'&&listed.count===1&&listed.entryCount===2&&
+      calls.some(x=>x.type===1&&x.devHandler===2)&&globalThis.S.resManifest===null&&e87!==q87&&
+      BROWSE.context.mode==='receiver'&&BROWSE.files.length===0}
+  }catch(e){return{n:'browse walker retains handler and isolates E87/Q87 manifests',ok:false,error:e.message}}
   finally{
     browseOnce=saved.browseOnce;BROWSE.tree=[];BROWSE.files=[];BROWSE.manifest=null;
+    BROWSE.context=saved.context;BROWSE.contextKey=saved.contextKey;BROWSE.manifest=saved.manifest;
     for(const k of['S','renderLab','log'])if(saved[k]===undefined)delete globalThis[k];else globalThis[k]=saved[k]
   }
 })()`));
 res.push(await vm.runInThisContext(`(async()=>{
-  const saved={rcspCmd,rcspAck,S:globalThis.S};let badCrc=false,request=null;
+  const saved={rcspCmd,rcspAck,S:globalThis.S,context:BROWSE.context,contextKey:BROWSE.contextKey};let badCrc=false,rejectRequest=false,request=null;
   const frame=(cmd,body)=>Uint8Array.of(0xFE,0xDC,0xBA,0xC0,cmd,body.length>>8,body.length&255,...body,0xEF);
   try{
-    globalThis.S={abort:false,conn:'on',gattReady:true,P:{auth:{ok:true}},set:{reqTo:1000,browseTo:10000}};
+    globalThis.S={abort:false,conn:'on',gattReady:true,dev:{id:'e87-test',name:'E87'},P:{auth:{ok:true},deviceId:'e87-test',name:'E87',advertisedName:'E87',profileId:'e87-ac697x',mode:'standard'},set:{reqTo:1000,browseTo:10000}};
+    BROWSE.context=browseContext();BROWSE.contextKey=browseContextKey(BROWSE.context);
     rcspAck=async()=>{};
     rcspCmd=async(cmd,payload)=>{
       request={cmd,payload:Array.from(payload)};
+      if(rejectRequest){rejectRequest=false;return{kind:'fe-response',status:1,payload:new Uint8Array(0)}}
       const bytes=Uint8Array.of(0x41,0x42,0x43),crc=crc16(bytes)^(badCrc?1:0);
       rcspRoute('ae02',frame(0x01,[0x45,0x24,0,0,0,0,crc>>8,crc&255,...bytes]));
       rcspRoute('ae02',frame(0x24,[0x46,0x80,0,0,0,0]));
       return{kind:'fe-response',status:0,payload:Uint8Array.of(0x01,0,0,0,3)}
     };
-    const file={devHandler:2,cluster:0x12345678,path:'BAG/image.jpg'};
+    const file={devHandler:2,cluster:0x12345678,path:'test-dir/image.jpg'};
     const good=await readBrowseFile(file);
     badCrc=true;
     const bad=await readBrowseFile(file);
+    rejectRequest=true;const rejected=await readBrowseFile(file);
     return{n:'0x24 cluster read validates request, stream CRC, and completion',ok:good.ok&&hex(good.data,'')==='414243'&&
       request.cmd===0x24&&request.payload.length===13&&request.payload[0]===1&&request.payload[4]===2&&
-      request.payload.slice(9).join(',')==='18,52,86,120'&&!bad.ok&&bad.error.includes('CRC mismatch')}
+      request.payload.slice(9).join(',')==='18,52,86,120'&&!bad.ok&&bad.error.includes('CRC mismatch')&&
+      !rejected.ok&&rejected.status===1&&rejected.error.includes(hx(1))}
   }catch(e){return{n:'0x24 cluster read validates request, stream CRC, and completion',ok:false,error:e.message}}
   finally{
     rcspCmd=saved.rcspCmd;rcspAck=saved.rcspAck;
+    BROWSE.context=saved.context;BROWSE.contextKey=saved.contextKey;
     if(saved.S===undefined)delete globalThis.S;else globalThis.S=saved.S
   }
 })()`));
