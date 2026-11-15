@@ -1,7 +1,12 @@
 /* ===== i18n ===== */
 const T={conn:['Подключить','Connect'],disc:['Отключить','Disconnect'],connAll:['Все устройства','All devices'],
   st_off:['нет связи','offline'],st_connecting:['подключение…','connecting…'],st_on:['на связи','connected'],
-  passport:['Паспорт устройства','Device passport'],f5History:['f5 — история сырых значений','f5 — raw value history'],image:['Образ и вердикт','Image & verdict'],flash:['Прошивка','Flashing'],settings:['Настройки','Settings'],
+  passport:['Паспорт устройства','Device passport'],availableMemoryHistory:['Доступная память (KiB)','Available memory (KiB)'],
+  productFwName:['Название','Name'],productFwVersion:['Версия','Version'],productFwBuild:['Сборка','Build'],
+  productFwNamePh:['Название, например E87_EN','Name, e.g. E87_EN'],productFwVersionPh:['Версия, например 11.1.0.2','Version, e.g. 11.1.0.2'],
+  productFwBuildPh:['Сборка, например 251229','Build, e.g. 251229'],setProductFw:['Сохранить версию продукта','Save product version'],
+  clearProductFw:['Очистить','Clear'],productFwSaved:['Версия продукта сохранена','Product version saved'],
+  productFwCleared:['Версия продукта очищена','Product version cleared'],image:['Образ и вердикт','Image & verdict'],flash:['Прошивка','Flashing'],settings:['Настройки','Settings'],
   rescan:['Перечитать','Re-read'],copy:['Копировать','Copy'],gatt:['GATT-карта','GATT map'],
   drop:['Перетащите .ufw / .bin или нажмите (≤ 16 МБ). Файл не покидает устройство.','Drop .ufw / .bin or click (≤ 16 MB). The file never leaves this device.'],
   dumpPass:['Паспорт дампа (.json) для restore:','Dump passport (.json) for restore:'],path:['Путь OTA','OTA path'],

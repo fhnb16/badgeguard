@@ -16,18 +16,20 @@ async function bootstrapFull(ms){const r={},rc=c=>ackOk(waitFor((k,u)=>k==='ae02
   return r}
 async function collectMeta(){
   const t0=Date.now(),left=()=>Math.max(300,Math.min(S.set.reqTo,12000-(Date.now()-t0)));
-  S.boot=false;S.f5HistoryKey=null;
+  S.boot=false;S.availableMemoryHistoryKey=null;
   S.P={deviceId:S.dev.id,name:S.dev.name||null,advertisedName:S.dev.name||null,chipFamily:'unknown',sdkString:null,fwVersion:null,productName:null,battery:{level:null,charging:null,mode:null},gatt:S.gatt,
     capabilities:{qixFd00:!!S.chars.fd00,rcspOta:false,rcspOtaProbe:false,rcspOtaObserved:false,
       rcspTransport:!!(S.chars.ae01&&S.chars.ae02),batteryService:!!S.chars['2a19']},auth:{ok:false,keyProfile:null},
     testModeSuspected:!!S.flags.testMode,profileId:null,capturedAt:null,bootMarker:false,display:null,mac:null,targetInfo:null,sysInfo:null,decoded:null,
-    f5History:[],unsupported:[],transport:{rcsp:!!(S.chars.ae01&&S.chars.ae02),sideband:!!(S.chars.fd01&&S.chars.fd02&&S.chars.fd03),qixFd00:!!S.chars.fd00},
+    availableMemoryHistory:[],productFirmware:loadProductFirmware(S.dev.id),unsupported:[],transport:{rcsp:!!(S.chars.ae01&&S.chars.ae02),sideband:!!(S.chars.fd01&&S.chars.fd02&&S.chars.fd03),qixFd00:!!S.chars.fd00},
     variant:null,charIds:Object.keys(S.chars).sort()};
   render();
   const step=async(n,f,force)=>{if(!force&&Date.now()-t0>12000)return log('EV','',null,n+': skipped (budget)');try{await f()}catch(e){log('EV','',null,`${n}: ${e.message}`)}};
   await step('name',async()=>{if(S.chars['2a00'])S.P.name=new TextDecoder().decode(await gq(()=>S.chars['2a00'].readValue()))||S.P.name});
   await step('passive',()=>sleep(Math.min(600,left())));
-  await step('auth',async()=>{S.P.auth=await authHandshake(left())});
+  try{S.P.auth=await authHandshake(left())}
+  catch(e){log('EV','',null,`auth handshake failed; closing GATT: ${e.message}`);disconnect();
+    const err=new Error(`E-AUTH-002 handshake failed; connection closed: ${e.message}`);err.code='E-AUTH-002';throw err}
   if(S.P.auth.ok){
     await step('bootstrap',async()=>{const r=await bootstrapFull(Math.min(1500,left()));S.boot=true;log('EV','',null,'bootstrap '+JSON.stringify(r))})}
   else{if(S.set.rcspPreAuth){
@@ -40,8 +42,8 @@ async function collectMeta(){
   S.P.chipFamily=familyOf(S.P.sdkString);S.P.profileId=matchProfile(S.P,S.profiles);
   S.P.variant=S.P.capabilities.qixFd00?'Qix characteristic + RCSP AE00':S.P.transport.sideband?'FD01–FD05 sideband + RCSP AE00':'RCSP AE00 only';
   const profile=S.P.profileId&&S.profiles[S.P.profileId];
-  const receiverMode=!!(profile&&profile.mode==='receiver')||/^Q87/i.test(S.dev&&S.dev.name||S.P.name||'');
-  S.P.mode=receiverMode?'receiver':profile&&profile.mode||'standard';
+  S.P.mode=deviceMode(S.P,profile);
+  const receiverMode=S.P.mode==='receiver';
   S.P.capabilities.rcspOta=!!(S.P.capabilities.rcspOtaObserved&&!receiverMode);
   S.P.unsupported=profile&&profile.unsupported?profile.unsupported.slice():[];
   S.P.fileTransfer=S.P.decoded&&S.P.decoded.targetInfo&&S.P.decoded.targetInfo.fields.fileTransfer?
@@ -49,5 +51,5 @@ async function collectMeta(){
   S.P.authProfile=S.P.auth.keyProfile;
   S.P.transport={...S.P.transport,...(profile&&profile.transport||{})};
   if(profile){S.P.chip=profile.chip||null;S.P.family=profile.family||S.P.chipFamily;S.P.sdk=profile.sdk||S.P.sdkString}
-  S.P.maxNotify={...S.maxNotify};S.P.capturedAt=new Date().toISOString();bindF5History();
+  S.P.maxNotify={...S.maxNotify};S.P.capturedAt=new Date().toISOString();bindMemoryHistory();
   log('EV','',null,`passport ${Date.now()-t0} ms, auth=${S.P.auth.ok} boot=${S.boot} profile=${S.P.profileId}`);idb('passports',S.P);toast(t('meta'),S.P.profileId?'ok':'warn');render()}

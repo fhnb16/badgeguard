@@ -30,9 +30,9 @@ const EVIDENCE_SEED=[
   {op:0x24,transport:'FD01',kind:'sideband-data',len:7,status:null,verdict:'stub',note:'hr: заглушка watch-SDK',src:'log'},
   {op:0xE5,transport:'AE01',kind:'fe-push',len:6,status:null,verdict:'observed-request',dataHex:'00 00 00 00 00 08',
     note:'OTA pull request captured; request alone does not validate the image or arm transfer',src:'user-capture'},
-  {op:0xA0,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'A0 00',note:'Qix SET_TEST_MODE: только транспортный ACK, 8 проб без данных',src:'log'},
-  {op:0xAA,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'AA 00',note:'TEST_GET_FLASH 256/128/64/16 Б × 2 сеанса — данных нет',src:'log'},
-  {op:0xA6,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'A6 00',note:'TEST_CLOSE: только ACK; после него нужен power-cycle',src:'log'}];
+  {op:0xA0,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'ack-only',dataHex:'A0 00',note:'Historical probe only; SDK names this SPORTS_DATA_INFO_GET, not a flash command',src:'log'},
+  {op:0xAA,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'ack-only',dataHex:'AA 00',note:'Historical ACK-only probe; semantics unverified and not a flash-read command',src:'log'},
+  {op:0xA6,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'ack-only',dataHex:'A6 00',note:'Historical probe only; SDK names this SPORTS_DATA_SYNC, not a flash command',src:'log'}];
 
 /* Raw Probe accepts only the bounded read-only request allowlist. */
 async function rawProbe({transport='ae01',hexBytes='',ms=null,note='raw probe'}={}){
@@ -94,18 +94,21 @@ function buildCapabilityMatrix(){
   for(const s of PROBE.scan.filter(x=>!x.skipped))push({op:s.op,opHex:s.opHex,name:s.name,transport:s.transport==='fd02'?'FD02':'AE01',
     kind:s.kind,status:s.status,len:s.len,dataHex:s.dataHex,verdict:s.verdict,confidence:s.confidence,source:'scan',
     sdk:(opInfo(s.op)||{}).sdk_name||null,note:(opInfo(s.op)||{}).semantics||null});
-  for(const e of EVIDENCE_SEED)if(!seen.has(e.transport+':'+e.op))push({op:e.op,opHex:hx(e.op),name:opName(e.op),transport:e.transport,kind:e.kind,
+  for(const e of EVIDENCE_SEED)if(!seen.has(e.transport+':'+e.op)){
+    const sideband=e.transport.startsWith('FD'),info=opInfo(e.op);
+    push({op:e.op,opHex:hx(e.op),name:sideband?(QIX_OPS[e.op]||{}).n||opName(e.op):opName(e.op),transport:e.transport,kind:e.kind,
     status:e.status,len:e.len,dataHex:e.dataHex||'',verdict:e.verdict,confidence:'field-log',source:'field-capture',note:e.note,
-    sdk:(opInfo(e.op)||{}).sdk_name||null});
+    sdk:sideband?null:info&&info.sdk_name||null})}
   const P=S.P;
   return{artifact:'capability-matrix.json',generatedAt:new Date().toISOString(),
-    device:P?{deviceId:P.deviceId,name:P.name,chipFamily:P.chipFamily,sdkString:P.sdkString,fwVersion:P.fwVersion,profileId:P.profileId,
+    device:P?{deviceId:P.deviceId,name:P.name,mode:P.mode,chipFamily:P.chipFamily,sdkString:P.sdkString,fwVersion:P.fwVersion,
+      productFirmware:P.productFirmware||null,profileId:P.profileId,
       uboot:P.decoded&&P.decoded.targetInfo?P.decoded.targetInfo.fields.ubootVersion:null}:null,
     rules:{success:'matching fe-response or relevant sideband-data; fe-push and generic-ack are not success',
       notSuccess:'generic-ack (9E … FF 02 00 echo status) — только приём байтов',
       scanPayload:'per-opcode read-only request bodies; unknown/write opcodes are skipped',
       skipped:'all commands outside the read-only allowlist'},
-    unsupported:(P&&P.unsupported)||['0xA0','0xAA','0xA6','qix-ota','ble-raw-dump'],
+    unsupported:(P&&P.unsupported)||['qix-ota','ble-raw-dump'],
     count:rows.length,rows:rows.sort((a,b)=>a.op-b.op)}}
 const exportMatrix=()=>download('capability-matrix.json',S.capMatrix||buildCapabilityMatrix());
 

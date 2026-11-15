@@ -7,7 +7,19 @@ function init(){
       setSetting(k,v)})});
   $('#btnConn').onclick=()=>S.conn==='on'?disconnect():connect(false);$('#btnConnAll').onclick=()=>connect(true);
   $('#btnTheme').onclick=()=>setSetting('theme',S.set.theme==='dark'?'light':'dark');$('#btnLang').onclick=()=>setSetting('lang',S.set.lang==='en'?'ru':'en');
-  $('#btnRescan').onclick=()=>collectMeta();$('#btnExpPass').onclick=()=>S.P&&download('passport.json',S.P);$('#btnCopyPass').onclick=()=>S.P&&copy(JSON.stringify(S.P,null,2));
+  $('#btnRescan').onclick=()=>collectMeta().catch(e=>{log('EV','',null,'passport reread ✕ '+e.message);toast(e.message,'block')});
+  $('#btnExpPass').onclick=()=>S.P&&download('passport.json',S.P);$('#btnCopyPass').onclick=()=>S.P&&copy(JSON.stringify(S.P,null,2));
+  $('#btnSetProductFirmware').onclick=()=>{
+    if(!S.P)return toast(t('noDev'),'warn');
+    try{
+      S.P.productFirmware=saveProductFirmware(S.P.deviceId,{name:$('#productFwName').value.trim(),version:$('#productFwVersion').value.trim(),
+        build:$('#productFwBuild').value.trim()});
+      idb('passports',S.P);render();toast(t('productFwSaved'),'ok')}
+    catch(e){log('EV','',null,'product firmware ✕ '+e.message);toast(e.message,'warn')}};
+  $('#btnClearProductFirmware').onclick=()=>{
+    if(!S.P)return toast(t('noDev'),'warn');
+    try{clearProductFirmware(S.P.deviceId);S.P.productFirmware=null;idb('passports',S.P);render();toast(t('productFwCleared'),'ok')}
+    catch(e){log('EV','',null,'product firmware clear ✕ '+e.message);toast(e.message,'warn')}};
   const drop=$('#drop');$('#fileImg').onchange=e=>{loadImage(e.target.files[0]);e.target.value=''};
   drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#fileImg').click()}};
   drop.ondragover=e=>{e.preventDefault();drop.classList.add('drop--over')};drop.ondragleave=()=>drop.classList.remove('drop--over');

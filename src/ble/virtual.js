@@ -2,7 +2,7 @@
  * Повторяет ПОВЕДЕНИЕ реального бейджа по полевому логу 2026-11-14:
  *  — auth E1 (профиль B), bootstrap, target_info/sys_info байт-в-байт из лога;
  *  — C7 фрагментами по 27 Б, battery push 0x27, health-заглушки 0x22/0x24;
- *  — 0xA0/0xAA/0xA6 отвечают ТОЛЬКО generic-ack (доказанное отсутствие raw-дампа);
+ *  — исторические 0xA0/0xAA/0xA6 пробы не являются командами чтения флеша;
  *  — файловый браузер 0x0C/0x01/0x0D, малые файлы 0x28, OTA E1/E2/E3/E5/E6/E7,
  *  — контент-путь 0x21/0x27/0x1B/0x1D/0x20/0x1C с оконным управлением.
  * Никакого DOM: работает и в браузере (кнопка «Демо»), и в jsdom-тестах.
@@ -172,7 +172,7 @@ function makeVirtualE87(opt={}){
         if(sub===0x24)return send('fd01',q9(0x24,[0x19,1,2,1,0x3C,5,0]));
         return}
       case 0x21:return send('fd01',q9(0x21,[0,7]));
-      // Qix test-mode: только транспортный ACK — данных НЕТ (воспроизводим доказанный negative)
+      // Historical opcode observations were ACK-only; the simulator does not model flash data.
       case 0xA0:case 0xAA:case 0xA6:return send('fd03',q9(0xFF,[cmd,0]));
       default:return}}
   return{device,stat,get authed(){return authed},get content(){return cnt},get ota(){return ota},

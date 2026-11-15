@@ -50,7 +50,7 @@ const QIX_OPS={0x02:{n:'set_time',cls:'write'},0x16:{n:'display_ctrl',cls:'write
   0x22:{n:'steps (SDK stub)',cls:'read'},0x23:{n:'sleep (SDK stub)',cls:'read'},0x24:{n:'hr (SDK stub)',cls:'read'},0x25:{n:'pressure (stub)',cls:'read'},
   0x26:{n:'oxygen (stub)',cls:'read'},0x27:{n:'battery',cls:'read'},0x29:{n:'init/heartbeat',cls:'write'},0xC6:{n:'get_screen_info',cls:'read'},
   0xC7:{n:'screen_info (ответ)',cls:'read'},0xDC:{n:'ready',cls:'read'},0xFF:{n:'customer/ack',cls:'read'},
-  0xA0:{n:'Qix SET_TEST_MODE (BR35 only)',cls:'danger'},0xAA:{n:'Qix TEST_GET_FLASH (BR35 only)',cls:'danger'},0xA6:{n:'Qix TEST_CLOSE (BR35 only)',cls:'danger'}};
+  0xA0:{n:'SPORTS_DATA_INFO_GET (SDK)',cls:'read'},0xA6:{n:'SPORTS_DATA_SYNC (SDK)',cls:'write'}};
 // Health-заглушки: peripherals_support=0 → физических датчиков нет (ТЗ §5.1)
 const HEALTH_STUB=new Set([0x22,0x23,0x24,0x25,0x26]);
 const SMALL_FILE_TYPES=[{type:1,name:'contacts'},{type:2,name:'sports_record'},{type:3,name:'heart_rate'},{type:4,name:'blood_oxygen'},

@@ -1,7 +1,7 @@
 // Unit + mock tests: core rules, protocol guards, CRC/SHA vectors, hash mock, and dump validation.
 import{readFileSync}from'node:fs';import vm from'node:vm';import{webcrypto}from'node:crypto';
 globalThis.crypto??=webcrypto;
-vm.runInThisContext(['protocol/jl-auth.js','core/registry.js','core/opmap.js','core/core.js','core/bitfields.js','protocol/rcsp.js','protocol/probe.js','protocol/filebrowse.js','protocol/ota.js','protocol/hash.js','integrity/core.js']
+vm.runInThisContext(['protocol/jl-auth.js','core/registry.js','core/opmap.js','core/core.js','core/bitfields.js','protocol/rcsp.js','protocol/content.js','protocol/probe.js','protocol/filebrowse.js','protocol/ota.js','protocol/hash.js','integrity/core.js']
   .map(f=>readFileSync(new URL('../src/'+f,import.meta.url),'utf8')).join('\n'),{filename:'core-bundle.js'});
 const res=[...vm.runInThisContext('selfTest()'),...await vm.runInThisContext('asyncSelfTest()')];
 res.push(...vm.runInThisContext(`(()=>{
@@ -19,6 +19,19 @@ res.push(...vm.runInThisContext(`(()=>{
     })
   ];
 })()`));
+res.push(...vm.runInThisContext(`(()=>{
+  const saved={localStorage:globalThis.localStorage,log:globalThis.log},store=new Map();
+  try{
+    globalThis.localStorage={getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)};
+    globalThis.log=()=>{};
+    const savedFirmware=saveProductFirmware('device-e87',{name:'E87_EN',version:'11.1.0.2',build:'251229'});
+    const loaded=loadProductFirmware('device-e87');
+    clearProductFirmware('device-e87');
+    return[{n:'service-menu product firmware persists per Web Bluetooth device',
+      ok:savedFirmware.version==='11.1.0.2'&&loaded.build==='251229'&&loadProductFirmware('device-q87')===null&&loadProductFirmware('device-e87')===null}]
+  }catch(e){return[{n:'service-menu product firmware persists per Web Bluetooth device',ok:false,error:e.message}]}
+  finally{for(const k of['localStorage','log'])if(saved[k]===undefined)delete globalThis[k];else globalThis[k]=saved[k]}
+})()`));
 res.push(await vm.runInThisContext(`(async()=>{
   const savedS=globalThis.S;
   const frame=Uint8Array.of(0xFE,0xDC,0xBA,0xC0,0xE5,0,7,0x1C,0,0,0,0,0,8,0xEF);
@@ -35,19 +48,35 @@ res.push(await vm.runInThisContext(`(async()=>{
 res.push(...vm.runInThisContext(`(()=>{
   const saved={S:globalThis.S,localStorage:globalThis.localStorage,log:globalThis.log},store=new Map();
   try{
-    globalThis.S={P:{deviceId:'q87-device',profileId:'e87-ac697x-q87',mode:'receiver',mac:'47:89:00:02:09:dc',f5History:[]},f5HistoryKey:null};
+    globalThis.S={P:{deviceId:'q87-device',profileId:'e87-ac697x',mode:'receiver',mac:'47:89:00:02:09:dc',availableMemoryHistory:[]},availableMemoryHistoryKey:null};
     globalThis.localStorage={getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,v)};
     globalThis.log=()=>{};
     const first=Uint8Array.of(1,0x68,1,0x68,1,0x70,1,0x70,1,0xF4,0x10,0,0);
-    const next=Uint8Array.of(1,0x68,1,0x68,1,0x70,1,0x70,1,0xD0,0x10,0,0);
-    recordC7(first);bindF5History();recordC7(next);
-    const key=f5HistoryKey(S.P),e87Key=f5HistoryKey({...S.P,mode:'standard',mac:'46:88:00:02:09:dc'});
+    const next=Uint8Array.of(1,0x68,1,0x68,1,0x70,1,0x70,1,0x90,0x10,0,0);
+    recordC7(first);bindMemoryHistory();recordC7(next);
+    const key=memoryHistoryKey(S.P),e87Key=memoryHistoryKey({...S.P,mode:'standard',mac:'46:88:00:02:09:dc'});
     const savedHistory=JSON.parse(store.get('bg.'+key));
-    return[{n:'C7 f5 history persists per mode/device without inferring meaning',
-      ok:S.P.display.f5===464&&S.P.f5History.length===2&&S.P.f5History[0].value===500&&
-        S.P.f5History[1].value===464&&savedHistory.length===2&&key.includes('receiver')&&key!==e87Key}]
-  }catch(e){return[{n:'C7 f5 history persists per mode/device without inferring meaning',ok:false,error:e.message}]}
+    return[{n:'C7 available-memory history persists per mode/device',
+      ok:S.P.display.availableMemoryKiB===4240&&S.P.availableMemoryHistory.length===2&&S.P.availableMemoryHistory[0].value===4340&&
+        S.P.availableMemoryHistory[1].value===4240&&savedHistory.length===2&&key.includes('receiver')&&key!==e87Key}]
+  }catch(e){return[{n:'C7 available-memory history persists per mode/device',ok:false,error:e.message}]}
   finally{for(const k of['S','localStorage','log'])if(saved[k]===undefined)delete globalThis[k];else globalThis[k]=saved[k]}
+})()`));
+res.push(...vm.runInThisContext(`(()=>{
+  const check=(n,fn)=>{try{fn();return{n,ok:true}}catch(e){return{n,ok:false,error:e.message}}};
+  return[
+    check('upload memory preflight applies 20% reserve in KiB',()=>{
+      const r=contentMemoryPreflight(36599,43);
+      if(r.requiredMemoryKiB!==43||r.availableMemoryKiB!==43)throw Error('wrong capacity calculation');
+      let blocked=false;try{contentMemoryPreflight(36599,42)}catch(e){blocked=e.message.startsWith('E-CNT-004')}
+      if(!blocked)throw Error('insufficient capacity accepted')
+    }),
+    check('content final status rejects device failure',()=>{
+      if(!assertContentStatus(0))throw Error('success status rejected');
+      let rejected=false;try{assertContentStatus(1)}catch(e){rejected=e.message.startsWith('E-CNT-003')}
+      if(!rejected)throw Error('non-zero status accepted')
+    })
+  ];
 })()`));
 res.push(await vm.runInThisContext(`(async()=>{
   const saved={browseOnce,renderLab:globalThis.renderLab,log:globalThis.log,S:globalThis.S,context:BROWSE.context,contextKey:BROWSE.contextKey,manifest:BROWSE.manifest};
@@ -65,7 +94,7 @@ res.push(await vm.runInThisContext(`(async()=>{
     const result=await browseAll({deep:true,maxDepth:3});
     const listed={file:result.files[0],count:result.manifest.listedFileCount,entryCount:result.manifest.listedEntryCount,fileCount:result.files.length};
     const e87=browseContextKey({profileId:'e87-ac697x',mode:'standard',mac:'46:88:00:02:09:dc',deviceId:'e87',name:'E87'});
-    const q87Context={profileId:'e87-ac697x-q87',mode:'receiver',mac:'47:89:00:02:09:dc',deviceId:'q87',name:'Q87'};
+    const q87Context={profileId:'e87-ac697x',mode:'receiver',mac:'47:89:00:02:09:dc',deviceId:'q87',name:'Q87'};
     const q87=browseContextKey(q87Context);useBrowseContext(q87Context,q87);
     return{n:'browse walker retains handler and isolates E87/Q87 manifests',ok:listed.fileCount===1&&listed.file.dev===2&&
       listed.file.path==='test-dir/image.bin'&&listed.count===1&&listed.entryCount===2&&

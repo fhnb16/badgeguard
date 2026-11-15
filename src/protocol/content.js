@@ -8,6 +8,16 @@
 const CONTENT={running:false,mode:'image',payload:null,info:null,progress:0,result:null,error:null,chunkSize:490,windows:0};
 const crc16be=n=>[(n>>8)&255,n&255];
 const tmpName=()=>Math.floor(Math.random()*0xFFFFFF).toString(16).padStart(6,'0')+'.tmp';
+function contentMemoryPreflight(sizeBytes,availableMemoryKiB){
+  if(!Number.isSafeInteger(sizeBytes)||sizeBytes<0)throw new Error('E-CNT-004 invalid upload size');
+  if(!Number.isFinite(availableMemoryKiB)||availableMemoryKiB<0)throw new Error('E-CNT-004 available memory is unknown');
+  const requiredMemoryKiB=Math.ceil(sizeBytes*1.2/1024);
+  if(requiredMemoryKiB>availableMemoryKiB)
+    throw new Error(`E-CNT-004 insufficient memory: need ${requiredMemoryKiB} KiB including 20% reserve, available ${availableMemoryKiB} KiB`);
+  return{requiredMemoryKiB,availableMemoryKiB}}
+function assertContentStatus(status){
+  if(status!==0)throw new Error(`E-CNT-003 device final status ${hx(status)} (${statusName(status)})`);
+  return true}
 // Ответ на 0x20: путь в UTF-16LE с префиксом U+555C, как в официальном приложении
 function filePathResponse(sn,mode){
   const d=new Date(),p=n=>String(n).padStart(2,'0');
@@ -33,10 +43,15 @@ async function contentUpload(payload,mode='image',{onProgress=null}={}){
   if(payload.length>MAX_UPLOAD_BYTES)log('EV','',null,`внимание: ${payload.length} Б > бюджета ${MAX_UPLOAD_BYTES} Б — устройство может отказаться`);
   CONTENT.running=true;CONTENT.mode=mode;CONTENT.error=null;CONTENT.result=null;CONTENT.windows=0;S.abort=false;
   S.prog={done:0,total:payload.length,t0:performance.now(),start:0,win:0};
-  const wl=await wakeHold();const Q=contentQueue();
+  const wl=await wakeHold();let Q=null;
   const total=payload.length,fileCrc=crc16(payload);
   try{
     setPhase('preflight');
+    const screen=await readScreen();
+    if(!screen)throw new Error('E-CNT-004 could not read current available memory');
+    const memory=contentMemoryPreflight(total,screen.availableMemoryKiB);
+    log('EV','',null,`content preflight: ${memory.requiredMemoryKiB}/${memory.availableMemoryKiB} KiB including 20% reserve`);
+    if(S.abort)throw new Error('E-ABORT');
     // Фаза 6: session open
     const s21=await rcspCmd(0x21,[0x00],8000,{note:'content 0x21 session-open'});
     if(s21.kind!=='fe-response')throw new Error('E-CNT-001 0x21: '+kindTxt(s21.kind));
@@ -48,6 +63,7 @@ async function contentUpload(payload,mode='image',{onProgress=null}={}){
     const nm=new TextEncoder().encode(tmpName());
     const meta=Uint8Array.of((total>>>24)&255,(total>>>16)&255,(total>>>8)&255,total&255,...crc16be(fileCrc),
       Math.floor(Math.random()*256),Math.floor(Math.random()*256),...nm,0);
+    Q=contentQueue();
     const s1b=await rcspCmd(0x1B,meta,8000,{note:`content 0x1B metadata ${total} B crc=${hx(fileCrc)}`});
     if(s1b.kind!=='fe-response')throw new Error('E-CNT-001 0x1B: '+kindTxt(s1b.kind));
     if(s1b.status!==0)throw new Error('E-CNT-001 0x1B status '+statusName(s1b.status));
@@ -58,7 +74,7 @@ async function contentUpload(payload,mode='image',{onProgress=null}={}){
     // Фаза 9: оконная передача, устройство задаёт offset и размер окна
     let ev=await Q.next(10000);
     if(!ev)throw new Error('E-CNT-002 нет первого окна 0x1D за 10 с');
-    let seq=nextSN(),sent=0;
+    let seq=nextSN(),maxOffsetDelivered=0;
     for(;;){
       if(S.abort)throw new Error('E-ABORT');
       if(ev.cmd===0x1D){
@@ -67,14 +83,17 @@ async function contentUpload(payload,mode='image',{onProgress=null}={}){
         const st=p[0],win=be16(p,1),next=be32(p,3);
         CONTENT.windows++;
         if(st!==0)log('EV','',null,`окно: status=${hx(st)} (${statusName(st)})`);
-        if(win===0&&next>=total){log('EV','',null,'окно: передача завершена устройством');break}
+        if(win===0&&next>=total){
+          if(maxOffsetDelivered<total)throw new Error(`E-CNT-002 device closed window before all bytes were sent (${maxOffsetDelivered}/${total})`);
+          log('EV','',null,'окно: передача завершена устройством');
+          ev=await Q.next(10000);if(!ev)throw new Error('E-CNT-003 no FILE_COMPLETE after final window');continue}
         let off=next,slot=0,inWin=0;
         while(inWin<win&&off<total){
           const len=Math.min(cs,total-off,win-inWin),data=payload.subarray(off,off+len),c=crc16(data);
           await rcspWrite(fe(FE_FLAG.push,0x01,Uint8Array.of(seq&255,0x1D,slot&255,...crc16be(c),...data)),`content data @${hx(off)} +${len}`);
-          seq=(seq+1)&255;slot=(slot+1)&7;off+=len;inWin+=len;sent=off;
-          S.prog.done=off;CONTENT.progress=off/total;tick();
-          if(onProgress)onProgress(off,total);
+          seq=(seq+1)&255;slot=(slot+1)&7;off+=len;inWin+=len;maxOffsetDelivered=Math.max(maxOffsetDelivered,off);
+          S.prog.done=maxOffsetDelivered;CONTENT.progress=maxOffsetDelivered/total;tick();
+          if(onProgress)onProgress(maxOffsetDelivered,total);
           if(S.set.chunkDelay)await sleep(S.set.chunkDelay)}
         S.prog.win=CONTENT.windows;renderLab();
         ev=await Q.next(15000);
@@ -82,23 +101,24 @@ async function contentUpload(payload,mode='image',{onProgress=null}={}){
           else throw new Error(`E-CNT-002 таймаут окна на ${off}/${total}`)}
         continue}
       if(ev.cmd===0x20){ // FILE_COMPLETE — устройству нужен путь, таймаут у него жёсткий (~100 мс)
+        if(maxOffsetDelivered<total)throw new Error(`E-CNT-002 device completed before all bytes were sent (${maxOffsetDelivered}/${total})`);
         await rcspAck(0x20,ev.sn,0,filePathResponse(ev.sn,mode),null,'content 0x20 file-path');
         const fin=await Q.next(10000);
         if(fin&&fin.cmd===0x1C){const st=(fin.payload&&fin.payload.length)?fin.payload[0]:0xFF;
           await rcspAck(0x1C,fin.sn,0,[],null,'content 0x1C ack');
-          CONTENT.result=st;break}
-        CONTENT.result=0;break}
+          CONTENT.result=st;assertContentStatus(st);break}
+        throw new Error('E-CNT-003 missing final 0x1C status after 0x20')}
       if(ev.cmd===0x1C){const st=(ev.payload&&ev.payload.length)?ev.payload[0]:0xFF;
-        await rcspAck(0x1C,ev.sn,0,[],null,'content 0x1C ack');CONTENT.result=st;break}
+        await rcspAck(0x1C,ev.sn,0,[],null,'content 0x1C ack');CONTENT.result=st;assertContentStatus(st);break}
       ev=await Q.next(10000);if(!ev)throw new Error('E-CNT-002 таймаут ожидания завершения')}
     setPhase('done');
     const ok=CONTENT.result===0;
-    log('EV','',null,`content ${mode}: ${sent}/${total} Б, окон ${CONTENT.windows}, статус ${hx(CONTENT.result)}`);
+    log('EV','',null,`content ${mode}: ${maxOffsetDelivered}/${total} Б, окон ${CONTENT.windows}, статус ${hx(CONTENT.result)}`);
     toast(ok?'Контент отправлен ✓':'Устройство вернуло статус '+hx(CONTENT.result),ok?'ok':'block');
     if(ok)chime();
-    return{ok,bytes:sent,total,windows:CONTENT.windows,status:CONTENT.result,chunkSize:cs,crc16:fileCrc}}
+    return{ok,bytes:maxOffsetDelivered,total,windows:CONTENT.windows,status:CONTENT.result,chunkSize:cs,crc16:fileCrc}}
   catch(e){CONTENT.error=e.message;setPhase('error');log('EV','',null,'content ✕ '+e.message);toast(e.message,'block');throw e}
-  finally{CONTENT.running=false;Q.un();if(wl)wl.release().catch(()=>{});renderLab()}}
+  finally{CONTENT.running=false;if(Q)Q.un();if(wl)wl.release().catch(()=>{});renderLab()}}
 
 /* ---------- Прочие рабочие фичи (Фаза 5) ---------- */
 // Время: 9E 0x02, год LE (проверено на железе)

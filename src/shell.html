@@ -26,11 +26,18 @@
   <section class="panel">
     <h2 class="panel__h"><span class="panel__n">1</span><span data-i18n="passport"></span></h2>
     <dl id="passKv" class="kv"></dl>
-    <figure id="f5HistoryFigure" class="f5-history" hidden>
-      <figcaption data-i18n="f5History"></figcaption>
-      <svg id="f5Chart" viewBox="0 0 360 72" role="img"></svg>
-      <p id="f5HistoryMeta" class="mono"></p>
+    <figure id="memoryHistoryFigure" class="memory-history" hidden>
+      <figcaption data-i18n="availableMemoryHistory"></figcaption>
+      <svg id="memoryChart" viewBox="0 0 360 72" role="img"></svg>
+      <p id="memoryHistoryMeta" class="mono"></p>
     </figure>
+    <div class="row product-firmware">
+      <label><span data-i18n="productFwName"></span><input id="productFwName" type="text" data-i18n-ph="productFwNamePh"></label>
+      <label><span data-i18n="productFwVersion"></span><input id="productFwVersion" type="text" data-i18n-ph="productFwVersionPh"></label>
+      <label><span data-i18n="productFwBuild"></span><input id="productFwBuild" type="text" data-i18n-ph="productFwBuildPh"></label>
+      <button id="btnSetProductFirmware" class="btn" data-i18n="setProductFw"></button>
+      <button id="btnClearProductFirmware" class="btn" data-i18n="clearProductFw"></button>
+    </div>
     <details class="fold"><summary data-i18n="gatt"></summary><pre id="gattPre" class="mono pre"></pre></details>
     <div class="row"><button id="btnRescan" class="btn" data-i18n="rescan"></button><button id="btnExpPass" class="btn">passport.json</button><button id="btnCopyPass" class="btn" data-i18n="copy"></button></div>
   </section>

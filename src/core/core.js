@@ -4,13 +4,12 @@ const fromHex=s=>Uint8Array.from(s.replace(/[^0-9a-f]/gi,'').match(/../g)||[],h=
 const hx=n=>n==null?'—':'0x'+n.toString(16).toUpperCase();
 const eq=(a,b)=>!!a&&!!b&&a.length===b.length&&a.every((x,i)=>x===b[i]);
 
-const AC697X_PROFILE={match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},chip:'AC697N',family:'AC697x/BR30',sdk:'jl_sdk_ac697_publish',authProfile:'B',
-  transport:{rcsp:'AE00',sideband:'FD01-FD05',qixFd00:false},unsupported:['0xA0','0xAA','0xA6','qix-ota','ble-raw-dump'],fileTransfer:'0x00000007',peripherals:0,ota:false};
+const AC697X_PROFILE={match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','Q87','LED Badge']},chip:'AC697N',family:'AC697x/BR30',sdk:'jl_sdk_ac697_publish',authProfile:'B',
+  transport:{rcsp:'AE00',sideband:'FD01-FD05',qixFd00:false},unsupported:['qix-ota','ble-raw-dump'],fileTransfer:'0x00000007',peripherals:0,ota:false};
 const PROFILES={
   'e87-ac707n':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE'],chars:['fd01','fd02','fd03']},family:'AC707N/BR35',ota:true,chipkey:0x9847,
     flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},ubootSha256Allowlist:[],knownGoodImages:[],expectedForm:null,verifySpan:[0,0xFC000]},
   'e87-ac697x':AC697X_PROFILE,
-  'e87-ac697x-q87':{...AC697X_PROFILE,match:{...AC697X_PROFILE.match,names:['Q87']},mode:'receiver'},
   'e87-ac701n':{match:{sdkRegex:'jl_sdk_ac701',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC701N/BR28',ota:false}};
 const familyOf=s=>/ac707/.test(s||'')?'AC707N/BR35':/ac697/.test(s||'')?'AC697x/BR30':/ac701/.test(s||'')?'AC701N/BR28':'unknown';
 function matchProfile(P,profiles){
@@ -19,6 +18,10 @@ function matchProfile(P,profiles){
     if(P.sdkString&&new RegExp(m.sdkRegex).test(P.sdkString)&&m.gattServices.every(s=>P.gatt.services.some(u=>u.startsWith(s)||u.startsWith('0000'+s)))&&m.names.some(n=>name.startsWith(n))
       &&(m.chars||[]).every(c=>(P.charIds||[]).includes(c))&&!(m.charsAbsent||[]).some(c=>(P.charIds||[]).includes(c)))return id}
   return null}
+function deviceMode(P,profile){
+  const name=[P&&P.advertisedName,P&&P.name].filter(Boolean).join(' ');
+  if(/^47:89:/i.test(P&&P.mac||'')||/\bQ87\b/i.test(name))return'receiver';
+  return profile&&profile.mode||'standard'}
 // 9E-кадр: [0]=9E [1],[2]=? (меняются; seq/чексумма не подтверждены) [3]=cmd [4..5]=len LE [6..]=payload — сходится на всех TX/RX лога
 function parse9E(u){if(u[0]!==0x9E||u.length<6)return null;const len=u[4]|u[5]<<8;let s=0;for(let i=2;i<Math.min(u.length,6+len);i++)s+=u[i];
   return{chk:u[1],flags:u[2],cmd:u[3],len,payload:u.slice(6,6+len),complete:u.length>=6+len,ok:(s&255)===u[1]}}
@@ -55,37 +58,60 @@ function decodeTargetInfo(attrs){const o={};for(const{type,data}of attrs){const 
     type===10&&data.length>=4?`vid=${hx(data[0]<<8|data[1])} pid=${hx(data[2]<<8|data[3])}`:type===11?`${data.length} B (скрыт)`: // ключ устройства в паспорт не пишем
     type===13&&data.length>=4?Array.from(data.subarray(0,4)).join('.'):data.length===1?String(data[0]):txt||hex(data,'')}return o} // fw_version: трактовка 4 Б неоднозначна (qix-ble)
 const GENERIC4M={family:'unknown',flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000}};
-// C7 (ответ на C6), 13 B, u16 BE. 360×360 совпадает с панелью из ТЗ; назначение w2/h2 (368) и f5..f7 не подтверждено
-function decodeC7(p){if(!p||p.length<13)return null;const b=o=>p[o]<<8|p[o+1];return{width:b(0),height:b(2),w2:b(4),h2:b(6),f5:b(8),f6:p[10],f7:b(11)}}
-const F5_HISTORY_LIMIT=512;
-function f5HistoryKey(P){
+// C7 (ответ на C6): valid, четыре u16 LE размера, затем доступная память в KiB (u32 LE).
+function decodeC7(p){if(!p||p.length<13||p[0]!==1)return null;const u16=o=>p[o]|p[o+1]<<8,u32=o=>(p[o]|p[o+1]<<8|p[o+2]<<16|p[o+3]<<24)>>>0;
+  return{valid:true,width:u16(1),height:u16(3),pictureWidth:u16(5),pictureHeight:u16(7),availableMemoryKiB:u32(9)}}
+const MEMORY_HISTORY_LIMIT=512;
+function memoryHistoryKey(P){
   if(!P)return null;
   const device=P.mac||P.deviceId||P.advertisedName||P.name;
-  return device?`f5History.${encodeURIComponent(`${P.mode||'standard'}:${device}`)}`:null}
-function validF5History(value){
-  return Array.isArray(value)?value.filter(x=>x&&typeof x.ts==='string'&&Number.isFinite(x.value)).slice(-F5_HISTORY_LIMIT):[]}
-function saveF5History(key,history){
+  return device?`availableMemoryHistory.${encodeURIComponent(`${P.mode||'standard'}:${device}`)}`:null}
+function validMemoryHistory(value){
+  return Array.isArray(value)?value.filter(x=>x&&typeof x.ts==='string'&&Number.isFinite(x.value)&&x.value>=0).slice(-MEMORY_HISTORY_LIMIT):[]}
+function normalizeProductFirmware(value){
+  if(!value||typeof value.version!=='string'||!(/^\d+(?:\.\d+)+$/.test(value.version)))return null;
+  return{name:typeof value.name==='string'?value.name:null,version:value.version,build:typeof value.build==='string'?value.build:null,
+    source:'service-menu',capturedAt:typeof value.capturedAt==='string'?value.capturedAt:null}}
+function productFirmwareKey(deviceId){return deviceId?`bg.productFirmware.${encodeURIComponent(deviceId)}`:null}
+function loadProductFirmware(deviceId){
+  const key=productFirmwareKey(deviceId);if(!key)return null;
+  try{return normalizeProductFirmware(JSON.parse(localStorage.getItem(key)||'null'))}
+  catch(e){log('EV','',null,`ERROR loading product firmware: ${e.message}`);return null}}
+function saveProductFirmware(deviceId,value){
+  const key=productFirmwareKey(deviceId),productFirmware=normalizeProductFirmware(value);
+  if(!key||!productFirmware)throw new Error('valid device ID and dotted product version are required');
+  productFirmware.capturedAt=new Date().toISOString();
+  try{localStorage.setItem(key,JSON.stringify(productFirmware))}
+  catch(e){log('EV','',null,`ERROR saving product firmware: ${e.message}`);throw new Error(`could not save product firmware: ${e.message}`)}
+  return productFirmware}
+function clearProductFirmware(deviceId){
+  const key=productFirmwareKey(deviceId);if(!key)throw new Error('device ID is required');
+  try{localStorage.removeItem(key)}
+  catch(e){log('EV','',null,`ERROR clearing product firmware: ${e.message}`);throw new Error(`could not clear product firmware: ${e.message}`)}}
+function saveMemoryHistory(key,history){
   try{localStorage.setItem('bg.'+key,JSON.stringify(history))}
-  catch(e){log('EV','',null,`ERROR saving f5 history: ${e.message}`)}}
-function bindF5History(){
-  const key=f5HistoryKey(S.P);if(!key)return;
+  catch(e){log('EV','',null,`ERROR saving available-memory history: ${e.message}`)}}
+function bindMemoryHistory(){
+  const key=memoryHistoryKey(S.P);if(!key)return;
   let prior=[];
-  try{const raw=localStorage.getItem('bg.'+key);prior=raw==null?[]:validF5History(JSON.parse(raw))}
-  catch(e){log('EV','',null,`ERROR loading f5 history: ${e.message}`)}
-  const current=validF5History(S.P.f5History);
-  S.P.f5History=[...prior,...current].sort((a,b)=>a.ts.localeCompare(b.ts)).slice(-F5_HISTORY_LIMIT);
-  S.f5HistoryKey=key;saveF5History(key,S.P.f5History)}
+  try{const raw=localStorage.getItem('bg.'+key);prior=raw==null?[]:validMemoryHistory(JSON.parse(raw))}
+  catch(e){log('EV','',null,`ERROR loading available-memory history: ${e.message}`)}
+  const current=validMemoryHistory(S.P.availableMemoryHistory);
+  S.P.availableMemoryHistory=[...prior,...current].sort((a,b)=>a.ts.localeCompare(b.ts)).slice(-MEMORY_HISTORY_LIMIT);
+  S.availableMemoryHistoryKey=key;saveMemoryHistory(key,S.P.availableMemoryHistory)}
 function recordC7(payload){
   const display=decodeC7(payload);if(!display||!S.P)return display;
   S.P.display=display;
-  if(Number.isFinite(display.f5)){
-    const sample={ts:new Date().toISOString(),value:display.f5};
-    S.P.f5History=[...validF5History(S.P.f5History),sample].slice(-F5_HISTORY_LIMIT);
-    if(S.f5HistoryKey)saveF5History(S.f5HistoryKey,S.P.f5History)}
+  if(Number.isFinite(display.availableMemoryKiB)){
+    const sample={ts:new Date().toISOString(),value:display.availableMemoryKiB};
+    S.P.availableMemoryHistory=[...validMemoryHistory(S.P.availableMemoryHistory),sample].slice(-MEMORY_HISTORY_LIMIT);
+    if(S.availableMemoryHistoryKey)saveMemoryHistory(S.availableMemoryHistoryKey,S.P.availableMemoryHistory)}
   return display}
 const profileForSdk=(sdk,profiles)=>sdk?Object.keys(profiles).find(id=>new RegExp(profiles[id].match.sdkRegex).test(sdk))||null:null;
 // >0 upgrade, 0 same, <0 downgrade, null = unknown / different line
-function vcmp(a,b){if(!a||!b)return null;const x=a.split('.').map(Number),y=b.split('.').map(Number);if(x[0]!==y[0]||x[1]!==y[1])return null;
+function vcmp(a,b){if(typeof a!=='string'||typeof b!=='string'||!/^\d+(?:\.\d+)+$/.test(a)||!/^\d+(?:\.\d+)+$/.test(b))return null;
+  const x=a.split('.').map(Number),y=b.split('.').map(Number);
+  if(x.some(n=>!Number.isSafeInteger(n))||y.some(n=>!Number.isSafeInteger(n))||x[0]!==y[0]||x[1]!==y[1])return null;
   for(let i=2;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return Math.sign(d)}return 0}
 
 const RULE_TXT={
@@ -128,15 +154,17 @@ function evaluate(P,R,c){
   const dump=R.kind==='full-dump'||R.containsKeyMac,dc=c.dumpCert,dp=dc&&dc.passport,own=dump&&dp&&dp.deviceId===P.deviceId;
   add('R-DUMP',!dump?'pass':own&&dc&&dc.method==='wired-uboot'&&!qix?'warn':'block',dump?`cert.passport=${dp?dp.deviceId:'—'} method=${dc&&dc.method||'—'} path=${c.path}`:'no dump');
   add('R-DUMP-INTEG',!dump||dc&&dc.verified===true&&dc.sigOk===true&&dc.dumpSha256===R.sha256?'pass':'block',dump?(dc?`verified=${dc.verified} sig=${dc.sigOk} sha=${dc.dumpSha256===R.sha256}`:'no certificate'):'no dump');
-  const v=vcmp(R.version,P.fwVersion);
-  add('R-VER',v==null||v<0?'warn':'pass',`${P.fwVersion||'—'} → ${R.version||'—'}`);
+  const productVersion=P.productFirmware&&P.productFirmware.version,v=vcmp(R.version,productVersion);
+  add('R-VER',productVersion==null||v==null||v<0?'warn':'pass',
+    `product ${productVersion||'—'} → ${R.version||'—'}; BLE fwVersion ${P.fwVersion||'—'} not compared`);
   const kg=[...((pr&&pr.knownGoodImages)||[]).map(x=>x.sha256),...c.imageAllow];
   add('R-HASH',kg.includes(R.sha256)?'pass':'warn',(R.sha256||'').slice(0,16)+'…');
   add('R-PROBE',c.flags.probe?'block':'pass',`probe=${c.flags.probe}`);
   return{overall:rules.some(r=>r.severity==='block')?'BLOCK':rules.some(r=>r.severity==='warn')?'WARN':'ALLOW',rules}}
 
 function fixture(){
-  const P={deviceId:'dev',name:'EC-BADGE',chipFamily:'AC707N/BR35',sdkString:'jl_sdk_ac707_publish',fwVersion:'2.711.1.0.3',battery:{level:80,charging:false},capabilities:{qixFd00:true,rcspOta:true},profileId:'e87-ac707n',testModeSuspected:false,gatt:{services:[]}};
+  const P={deviceId:'dev',name:'EC-BADGE',chipFamily:'AC707N/BR35',sdkString:'jl_sdk_ac707_publish',fwVersion:'1.16.2.28',
+    productFirmware:{name:'example',version:'2.711.1.0.3',build:null},battery:{level:80,charging:false},capabilities:{qixFd00:true,rcspOta:true},profileId:'e87-ac707n',testModeSuspected:false,gatt:{services:[]}};
   const R={size:0x90000,sha256:'h',kind:'fw-custom',qixWrapped:true,chipkey:0x9847,targetProfileId:'e87-ac707n',ubootHash:'u',appBinSize:0x80000,crc:{hdr:true,list:true,data:true,qix:true},version:'2.711.1.0.4',geometry:{flashSize:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},containsKeyMac:false,internalJlCrcOk:true,slices:{onflash:'a',plain:'b'}};
   const c={path:'qix',lang:'ru',profiles:PROFILES,ubootAllow:['u'],imageAllow:['h'],maxImage:16<<20,qixReady:true,rcspReady:true,connected:true,phoneBtOff:true,flags:{testMode:false,dump:false,probe:false},dumpCert:null};
   return{P,R,c}}
@@ -149,7 +177,9 @@ function selfTest(){
   ok('CRC-16/XMODEM "123456789" = 0x31C3',crc16(new TextEncoder().encode('123456789'))===0x31C3);
   let f=fixture();ok('rules: reference → ALLOW',evaluate(f.P,f.R,f.c).overall==='ALLOW');
   const c7=parse9E(fromHex('9E 8D 00 C7 0D 00 01 68 01 68 01 70 01 70 01 F4 10 00 00')),d7=c7&&decodeC7(c7.payload);
-  ok('9E/C7 from E87 log: checksum ok, 360×360, 368×368',!!d7&&c7.ok&&c7.cmd===0xC7&&d7.width===360&&d7.h2===368&&d7.f5===500&&d7.f6===16);
+  ok('9E/C7: valid flag, LE dimensions, 4340 KiB available',!!d7&&c7.ok&&c7.cmd===0xC7&&d7.valid&&d7.width===360&&d7.height===360&&
+    d7.pictureWidth===368&&d7.pictureHeight===368&&d7.availableMemoryKiB===4340);
+  ok('C7: reject invalid screen-info response',decodeC7(Uint8Array.of(0,...c7.payload.subarray(1)))===null);
   const bp=parse9E(fromHex('9E 91 09 27 02 00 00 5F'));ok('9E/0x27 battery push from E87 log: 95%',bp.ok&&bp.cmd===0x27&&bp.payload[1]===95);
   ok('qixEncode: heartbeat = 9E B5 0B 29 01 00 80',hex(qixEncode(0x0B,0x29,[0x80]))==='9E B5 0B 29 01 00 80');
   ok('qixEncode: C6 = 9E D3 0B C6 01 00 01',hex(qixEncode(0x0B,0xC6,[1]))==='9E D3 0B C6 01 00 01');
@@ -182,13 +212,18 @@ function selfTest(){
   const mp=ids=>matchProfile({sdkString:'jl_sdk_ac707_publish',name:'E87',gatt:{services:['0000ae00-0000-1000-8000-00805f9b34fb','c2e6fd00-e966-1000-8000-bef9c223df6a']},charIds:ids},PROFILES);
   ok('profile: AC707N + FD01/FD02/FD03 → e87-ac707n',mp(['ae01','ae02','fd01','fd02','fd03','fd04','fd05'])==='e87-ac707n');
   ok('profile: without FD02 → none',mp(['ae01','ae02','fd01','fd03'])===null);
-  const q87=matchProfile({sdkString:'jl_sdk_ac697_publish',name:'Q87',gatt:{services:['ae00']},charIds:[]},PROFILES);
-  ok('profile: AC697x Q87 receiver alias is OTA-disabled',q87==='e87-ac697x-q87'&&PROFILES[q87].mode==='receiver'&&PROFILES[q87].ota===false);
-  ok('profile: Q87 advertisement survives different GATT name',matchProfile({sdkString:'jl_sdk_ac697_publish',name:'E87',advertisedName:'Q87',gatt:{services:['ae00']},charIds:[]},PROFILES)==='e87-ac697x-q87');
+  const q87Info={sdkString:'jl_sdk_ac697_publish',name:'Q87',mac:'47:89:00:02:09:dc',gatt:{services:['ae00']},charIds:[]};
+  const q87=matchProfile(q87Info,PROFILES);
+  ok('profile: AC697x E87/Q87 share one OTA-disabled profile',q87==='e87-ac697x'&&PROFILES[q87].ota===false&&deviceMode(q87Info,PROFILES[q87])==='receiver');
+  ok('profile: Q87 MAC identifies receiver mode with standard name',deviceMode({...q87Info,name:'E87',advertisedName:'E87'},PROFILES[q87])==='receiver');
+  ok('profile: E87 MAC identifies standard mode',deviceMode({...q87Info,name:'E87',mac:'46:88:00:02:09:dc'},PROFILES[q87])==='standard');
   const browseName=decodeBrowseEntries(Uint8Array.of(0x0A,0,0,0,2,0,0,12,0x96,0x65,0x10,0xC4,0x8B,0x23,0xEE,0xC2,0x2E,0xAF,0xDD,0xF6)).entries[0];
   ok('browse names: preserve raw bytes and alternate UTF-16LE candidate',browseName.nameHex==='966510C48B23EEC22EAFDDF6'&&browseName.nameEncoding==='byte-string'&&
     browseName.nameAlternateEncoding==='UTF-16LE'&&browseName.nameAlternate.length===6);
   const sevOf=(f,id)=>evaluate(f.P,f.R,f.c).rules.find(r=>r.id===id).severity;
+  f=fixture();f.P.fwVersion='999.0.0';ok('R-VER compares product firmware, not BLE SDK version',sevOf(f,'R-VER')==='pass');
+  f.P.productFirmware=null;f.P.fwVersion=f.R.version;ok('R-VER warns when product firmware is unknown',sevOf(f,'R-VER')==='warn');
+  ok('R-VER does not compare unlike or malformed version lines',vcmp('2.711.1.0.4','11.1.0.2')===null&&vcmp('11..0','11.1.0')===null);
   f=fixture();f.R.internalJlCrcOk=null;ok('R-CRC: internal JL CRC unknown → BLOCK',sevOf(f,'R-CRC')==='block');
   f=fixture();f.c.profiles={...PROFILES,'e87-ac707n':{...PROFILES['e87-ac707n'],expectedForm:'on-flash'}};f.R.slices.plain=null;
   ok('R-FORM: calibrated on-flash + flash.bin slice → pass',sevOf(f,'R-FORM')==='pass');

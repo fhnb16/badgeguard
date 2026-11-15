@@ -2,7 +2,7 @@
  * GATT E87 сверен с qix-ble service.py: сервис C2E6FD00 = Qix-sideband (TX FD02, RX FD01/FD03) — характеристика FD00 не обнаружена на E87;
  * AE00 = RCSP (TX AE01, RX AE02). FD05 не подписываем: по qix-ble это ломает REQ_UPDATE (silent reject). 2A19 на этой прошивке пустой. */
 const NAMES=['E87','E92','L8','X9','Q87','LED Badge','EC-BADGE'];
-const SVC={ae00:'0000ae00-0000-1000-8000-00805f9b34fb',fd:'c2e6fd00-e966-1000-8000-bef9c223df6a'};
+const SVC={ae00:'0000ae00-0000-1000-8000-00805f9b34fb',fd:'c2e6fd00-e966-1000-8000-bef9c223df6a',advertisedFd00:0xFD00};
 const OPT=[SVC.ae00,SVC.fd,'battery_service','generic_access'];
 const NOTIFY=['ae02','fd01','fd03'];
 const fe=(flag,cmd,body=[])=>Uint8Array.of(0xFE,0xDC,0xBA,flag,cmd,body.length>>8,body.length&255,...body,0xEF);
@@ -59,11 +59,14 @@ function sniff(u){if(!S.P)return;const s=ascii(u),sdk=s.match(/jl_sdk_ac\w+/),ve
 async function connect(all){
   if(!navigator.bluetooth)return toast('E-BLE-001','block');
   if(S.dev&&S.dev.gatt.connected)return toast(t('oneConn'),'warn');
-  let d;try{d=await navigator.bluetooth.requestDevice(all?{acceptAllDevices:true,optionalServices:OPT}:{filters:[...NAMES.map(namePrefix=>({namePrefix})),{services:[SVC.ae00]}],optionalServices:OPT})}
+  let d;try{d=await navigator.bluetooth.requestDevice(all?{acceptAllDevices:true,optionalServices:OPT}:{filters:[
+    ...NAMES.map(namePrefix=>({namePrefix})),{services:[SVC.ae00]},{services:[SVC.advertisedFd00]},
+    {manufacturerData:[{companyIdentifier:0x6DB3}]}],optionalServices:OPT})}
   catch(e){return toast('E-BLE-002: '+e.message,'warn')}
   if(S.ac)S.ac.abort();S.ac=new AbortController();S.dev=d;S.userDisc=false;
   d.addEventListener('gattserverdisconnected',onDisc,{signal:S.ac.signal});
-  try{await gattUp();await collectMeta()}catch(e){log('EV','',null,'E-BLE-003 '+e.message);toast('E-BLE-003: '+e.message,'block');setConn(d.gatt.connected?'on':'off')}}
+  try{await gattUp();await collectMeta()}catch(e){log('EV','',null,'E-BLE-003 '+e.message);toast(e.code==='E-AUTH-002'?e.message:'E-BLE-003: '+e.message,'block');
+    if(e.code==='E-AUTH-002'){S.userDisc=true;if(d.gatt.connected)d.gatt.disconnect();setConn('off')}else setConn(d.gatt.connected?'on':'off')}}
 
 async function gattUp(){
   setConn('connecting');
@@ -73,7 +76,7 @@ async function gattUp(){
     const cs=await gq(()=>s.getCharacteristics()).catch(()=>[]);
     g.chars[s.uuid]=cs.map(c=>`${c.uuid} [${['read','write','writeWithoutResponse','notify','indicate'].filter(p=>c.properties[p]).join(',')}]`);
     for(const c of cs)chars[short(c.uuid)]??=c}
-  S.chars=chars;S.gatt=g;S.dumpCs=0;for(const k in rxBuf)delete rxBuf[k];S.boot=false;
+  S.chars=chars;S.gatt=g;for(const k in rxBuf)delete rxBuf[k];S.boot=false;
   for(const k of NOTIFY){const c=chars[k];if(!c||!(c.properties.notify||c.properties.indicate))continue;
     try{await gq(()=>c.startNotifications());c.addEventListener('characteristicvaluechanged',onRx,{signal:S.ac.signal})}catch(e){log('EV',k,null,'notify ✕ '+e.message)}}
   S.gattReady=true;log('EV','',null,`GATT ↑ ${g.services.length} services`);setConn('on')}
