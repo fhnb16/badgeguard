@@ -19,6 +19,7 @@ function validateReadOnlyProbe(transport,u){
   else throw new Error('Неизвестный транспорт')}
 // Доказательства из полевого лога 2026-11-14 (data/session-2026-11-14.log) — стартовая карта
 const EVIDENCE_SEED=[
+  {op:0x02,transport:'AE01',kind:'fe-response',len:0,status:2,verdict:'unsupported',note:'GET_TARGET_FEATURE_MAP returned JL_PRO_STATUS_UNKNOWN_CMD in the supplied capture',src:'user-capture'},
   {op:0x06,transport:'AE01',kind:'fe-response',len:2,status:0,verdict:'ok',dataHex:'',note:'Phase-1 reset_auth, устройство отвечает FE',src:'log'},
   {op:0x03,transport:'AE01',kind:'fe-response',len:125,status:0,verdict:'ok',dataHex:'02 00 20 05 01 00 00 00 00 09 02 46 88 00 02 09 DC',note:'target_info: полный TLV 125 Б; dataHex приведён префиксом',src:'log'},
   {op:0x07,transport:'AE01',kind:'fe-response',len:56,status:0,verdict:'ok',dataHex:'00 1A 02 04 00 00 00 00',note:'sys_info: TLV 56 Б; dataHex приведён префиксом',src:'log'},
@@ -27,6 +28,8 @@ const EVIDENCE_SEED=[
   {op:0x21,transport:'FD01',kind:'sideband-data',len:2,status:null,verdict:'ok',note:'sync_state',src:'log'},
   {op:0x22,transport:'FD01',kind:'sideband-data',len:21,status:null,verdict:'stub',note:'steps: заглушка watch-SDK (датчиков нет)',src:'log'},
   {op:0x24,transport:'FD01',kind:'sideband-data',len:7,status:null,verdict:'stub',note:'hr: заглушка watch-SDK',src:'log'},
+  {op:0xE5,transport:'AE01',kind:'fe-push',len:6,status:null,verdict:'observed-request',dataHex:'00 00 00 00 00 08',
+    note:'OTA pull request captured; request alone does not validate the image or arm transfer',src:'user-capture'},
   {op:0xA0,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'A0 00',note:'Qix SET_TEST_MODE: только транспортный ACK, 8 проб без данных',src:'log'},
   {op:0xAA,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'AA 00',note:'TEST_GET_FLASH 256/128/64/16 Б × 2 сеанса — данных нет',src:'log'},
   {op:0xA6,transport:'FD02',kind:'generic-ack',len:2,status:0,verdict:'absent',dataHex:'A6 00',note:'TEST_CLOSE: только ACK; после него нужен power-cycle',src:'log'}];

@@ -95,10 +95,13 @@ function decodeBrowseEntries(data,queryType=0){
     const cluster=be32(data,i+1),fileNum=be16(data,i+5),n=data[i+7];i+=8;
     if(i+n>data.length)break;
     const nb=data.subarray(i,i+n);i+=n;
-    let name;
-    if(unicode&&n>=2&&n%2===0){let s='';for(let k=0;k<n;k+=2)s+=String.fromCharCode(nb[k]|(nb[k+1]<<8));name=s.replace(/\0+$/,'')}
-    else name=asciiOf(nb).replace(/\0+$/,'');
-    out.push({name,isFile,type:queryType,typeName:isFile?'file':'folder',id:fileNum,cluster,devIndex,dev:DEV_HANDLERS[devIndex]||('dev'+devIndex),size:0})}
+    const utf16le=n>=2&&n%2===0?Array.from({length:n/2},(_,k)=>String.fromCharCode(nb[k*2]|(nb[k*2+1]<<8))).join('').replace(/\0+$/,''):null;
+    const byteString=asciiOf(nb).replace(/\0+$/,'');
+    const name=unicode&&utf16le!=null?utf16le:byteString;
+    const alternate=unicode?byteString:utf16le,nameAlternate=alternate!==name?alternate:null;
+    out.push({name,nameEncoding:unicode&&utf16le!=null?'UTF-16LE':'byte-string',nameHex:hex(nb,''),nameAlternate,
+      nameAlternateEncoding:nameAlternate?(unicode?'byte-string':'UTF-16LE'):null,
+      isFile,type:queryType,typeName:isFile?'file':'folder',id:fileNum,cluster,devIndex,dev:DEV_HANDLERS[devIndex]||('dev'+devIndex),size:0})}
   return{entries:out,consumed:i,trailing:data.length-i}}
 
 // SIMPLE_FILE_TRANS 0x28 op=0: [version?] + N*(id:2 BE, size:2 BE); встречаются 3 варианта начала

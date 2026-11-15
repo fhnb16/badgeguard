@@ -4,16 +4,19 @@ const fromHex=s=>Uint8Array.from(s.replace(/[^0-9a-f]/gi,'').match(/../g)||[],h=
 const hx=n=>n==null?'—':'0x'+n.toString(16).toUpperCase();
 const eq=(a,b)=>!!a&&!!b&&a.length===b.length&&a.every((x,i)=>x===b[i]);
 
+const AC697X_PROFILE={match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},chip:'AC697N',family:'AC697x/BR30',sdk:'jl_sdk_ac697_publish',authProfile:'B',
+  transport:{rcsp:'AE00',sideband:'FD01-FD05',qixFd00:false},unsupported:['0xA0','0xAA','0xA6','qix-ota','ble-raw-dump'],fileTransfer:'0x00000007',peripherals:0,ota:false};
 const PROFILES={
   'e87-ac707n':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE'],chars:['fd01','fd02','fd03']},family:'AC707N/BR35',ota:true,chipkey:0x9847,
     flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},ubootSha256Allowlist:[],knownGoodImages:[],expectedForm:null,verifySpan:[0,0xFC000]},
-  'e87-ac697x':{match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},chip:'AC697N',family:'AC697x/BR30',sdk:'jl_sdk_ac697_publish',authProfile:'B',
-    transport:{rcsp:'AE00',sideband:'FD01-FD05',qixFd00:false},unsupported:['0xA0','0xAA','0xA6','qix-ota','ble-raw-dump'],fileTransfer:'0x00000007',peripherals:0,ota:false},
+  'e87-ac697x':AC697X_PROFILE,
+  'e87-ac697x-q87':{...AC697X_PROFILE,match:{...AC697X_PROFILE.match,names:['Q87']},mode:'receiver'},
   'e87-ac701n':{match:{sdkRegex:'jl_sdk_ac701',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC701N/BR28',ota:false}};
 const familyOf=s=>/ac707/.test(s||'')?'AC707N/BR35':/ac697/.test(s||'')?'AC697x/BR30':/ac701/.test(s||'')?'AC701N/BR28':'unknown';
 function matchProfile(P,profiles){
-  for(const[id,p]of Object.entries(profiles)){const m=p.match;
-    if(P.sdkString&&new RegExp(m.sdkRegex).test(P.sdkString)&&m.gattServices.every(s=>P.gatt.services.some(u=>u.startsWith(s)||u.startsWith('0000'+s)))&&m.names.some(n=>(P.name||'').startsWith(n))
+  const deviceNames=[P.advertisedName,P.name].filter(Boolean);
+  for(const name of deviceNames)for(const[id,p]of Object.entries(profiles)){const m=p.match;
+    if(P.sdkString&&new RegExp(m.sdkRegex).test(P.sdkString)&&m.gattServices.every(s=>P.gatt.services.some(u=>u.startsWith(s)||u.startsWith('0000'+s)))&&m.names.some(n=>name.startsWith(n))
       &&(m.chars||[]).every(c=>(P.charIds||[]).includes(c))&&!(m.charsAbsent||[]).some(c=>(P.charIds||[]).includes(c)))return id}
   return null}
 // 9E-кадр: [0]=9E [1],[2]=? (меняются; seq/чексумма не подтверждены) [3]=cmd [4..5]=len LE [6..]=payload — сходится на всех TX/RX лога
@@ -136,6 +139,12 @@ function selfTest(){
   const mp=ids=>matchProfile({sdkString:'jl_sdk_ac707_publish',name:'E87',gatt:{services:['0000ae00-0000-1000-8000-00805f9b34fb','c2e6fd00-e966-1000-8000-bef9c223df6a']},charIds:ids},PROFILES);
   ok('profile: AC707N + FD01/FD02/FD03 → e87-ac707n',mp(['ae01','ae02','fd01','fd02','fd03','fd04','fd05'])==='e87-ac707n');
   ok('profile: without FD02 → none',mp(['ae01','ae02','fd01','fd03'])===null);
+  const q87=matchProfile({sdkString:'jl_sdk_ac697_publish',name:'Q87',gatt:{services:['ae00']},charIds:[]},PROFILES);
+  ok('profile: AC697x Q87 receiver alias is OTA-disabled',q87==='e87-ac697x-q87'&&PROFILES[q87].mode==='receiver'&&PROFILES[q87].ota===false);
+  ok('profile: Q87 advertisement survives different GATT name',matchProfile({sdkString:'jl_sdk_ac697_publish',name:'E87',advertisedName:'Q87',gatt:{services:['ae00']},charIds:[]},PROFILES)==='e87-ac697x-q87');
+  const browseName=decodeBrowseEntries(Uint8Array.of(0x0A,0,0,0,2,0,0,12,0x96,0x65,0x10,0xC4,0x8B,0x23,0xEE,0xC2,0x2E,0xAF,0xDD,0xF6)).entries[0];
+  ok('browse names: preserve raw bytes and alternate UTF-16LE candidate',browseName.nameHex==='966510C48B23EEC22EAFDDF6'&&browseName.nameEncoding==='byte-string'&&
+    browseName.nameAlternateEncoding==='UTF-16LE'&&browseName.nameAlternate.length===6);
   const sevOf=(f,id)=>evaluate(f.P,f.R,f.c).rules.find(r=>r.id===id).severity;
   f=fixture();f.R.internalJlCrcOk=null;ok('R-CRC: internal JL CRC unknown → BLOCK',sevOf(f,'R-CRC')==='block');
   f=fixture();f.c.profiles={...PROFILES,'e87-ac707n':{...PROFILES['e87-ac707n'],expectedForm:'on-flash'}};f.R.slices.plain=null;

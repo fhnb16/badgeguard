@@ -52,10 +52,11 @@ async function otaProbe(){
 
 /* ---------- Интерлок записи ---------- */
 function otaGates(){
-  const P=S.P,dp=otaBankInfo(),img=S.R,w=S.wired||{};
+  const P=S.P,dp=otaBankInfo(),img=S.R,w=S.wired||{},profile=P&&P.profileId&&S.profiles[P.profileId];
   return[
     {id:'G-CONN',ok:S.conn==='on'&&S.gattReady,msg:'GATT жив'},
     {id:'G-AUTH',ok:!!(P&&P.auth.ok),msg:'RCSP auth пройден'},
+    {id:'G-PROFILE',ok:!!(profile&&profile.ota===true),msg:'OTA подтверждён для профиля устройства',ev:profile?P.profileId:'профиль не распознан'},
     {id:'G-PROBE',ok:OTA.canUpdate===0,msg:'0xE2 = 0x00 (устройство согласно)',ev:OTA.canUpdate==null?'зонд не выполнен':e2txt(OTA.canUpdate)},
     {id:'G-IMAGE',ok:!!(img&&S.buf),msg:'Загружен образ прошивки (.ufw/.bin)'},
     {id:'G-KEY',ok:!!(img&&img.chipkey!=null)&&!!w.chipkey&&img.chipkey===w.chipkey,msg:'chipkey образа = chipkey устройства (снят проводом)',
@@ -89,7 +90,7 @@ async function otaFlash(){
   if(!S.buf)throw new Error('нет образа');
   const ufw=new Uint8Array(S.buf);OTA.running=true;S.abort=false;OTA.error=null;OTA.pass=1;OTA.highWater=0;OTA.result=null;
   S.prog={done:0,total:ufw.length,t0:performance.now(),start:0,win:0};
-  const wl=await wakeHold();
+  const wl=await wakeHold();let pendingQueue=null;
   try{
     setPhase('preflight');
     if(OTA.canUpdate!==0){const p=await otaProbe();if(OTA.canUpdate!==0)throw new Error('E-OTA-001 устройство не согласно: '+e2txt(OTA.canUpdate))}
@@ -100,8 +101,9 @@ async function otaFlash(){
       if(!(e1.offset===0&&e1.len===0)&&e1.offset+e1.len>ufw.length)throw new Error('E-OTA-002 E1 требует байты за пределами файла — не тот образ');
       const e2=await rcspCmd(0xE2,mark,S.set.reqTo,{note:'OTA E2'});
       if(e2.kind!=='fe-response'||!e2.payload||e2.payload[0]!==0)throw new Error('E-OTA-001 E2='+hx(e2.payload&&e2.payload[0]));
-      setPhase('armed');await rcspCmd(0xE3,[],S.set.reqTo,{note:'OTA E3 enter-update'}); // девайс может не ответить и сразу начать тянуть данные
-      setPhase('transferring');result=await otaServe(ufw)}
+      setPhase('armed');pendingQueue=otaQueue();
+      await rcspCmd(0xE3,[],S.set.reqTo,{note:'OTA E3 enter-update'}); // устройству может прийти E5 до ответа на E3
+      setPhase('transferring');result=await otaServe(ufw,pendingQueue);pendingQueue=null}
     if(result===0x80){ // loader загружен → relink, НЕ разрываем ссылку сами
       otaLog('E6=0x80: loader загружен, шлём 0x0B и ждём, что устройство само оборвёт связь');
       const sw=await rcspCmd(0x0B,[0x00,0x01],6000,{note:'OTA 0x0B switch-communication-way'});
@@ -116,8 +118,9 @@ async function otaFlash(){
       const loader=await otaIsLoader();
       otaLog('pass 2: attr9 loader='+loader);
       OTA.pass=2;setPhase('transferring');
+      pendingQueue=otaQueue();
       await rcspCmd(0xE3,[],S.set.reqTo,{note:'OTA E3 pass2'}); // E1/E2 в pass 2 НЕ повторяем
-      result=await otaServe(ufw)}
+      result=await otaServe(ufw,pendingQueue);pendingQueue=null}
     OTA.result=result;
     if(result!==0)throw new Error('E-OTA-004 E6='+hx(result)+' '+e6txt(result));
     setPhase('rebooting');await rcspCmd(0xE7,[0x00],4000,{note:'OTA E7 reboot'}).catch(()=>{});
@@ -129,10 +132,10 @@ async function otaFlash(){
   catch(e){OTA.error=e.message;setPhase('error');otaLog('✕ '+e.message);
     if(/E-OTA-004|E-OTA-003/.test(e.message)){S.locked=true;disarmOta()}
     throw e}
-  finally{OTA.running=false;if(wl)wl.release().catch(()=>{});renderLab()}}
+  finally{if(pendingQueue)pendingQueue.un();OTA.running=false;if(wl)wl.release().catch(()=>{});renderLab()}}
 
-async function otaServe(ufw){
-  const Q=otaQueue(),total=ufw.length;let idle=0;
+async function otaServe(ufw,Q=otaQueue()){
+  const total=ufw.length;let idle=0;
   try{
     for(;;){
       if(S.abort)throw new Error('E-ABORT');

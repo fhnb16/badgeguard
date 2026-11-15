@@ -17,8 +17,9 @@ async function bootstrapFull(ms){const r={},rc=c=>ackOk(waitFor((k,u)=>k==='ae02
 async function collectMeta(){
   const t0=Date.now(),left=()=>Math.max(300,Math.min(S.set.reqTo,12000-(Date.now()-t0)));
   S.boot=false;
-  S.P={deviceId:S.dev.id,name:S.dev.name||null,chipFamily:'unknown',sdkString:null,fwVersion:null,productName:null,battery:{level:null,charging:null,mode:null},gatt:S.gatt,
-    capabilities:{qixFd00:!!S.chars.fd00,rcspOta:false,rcspOtaProbe:false,rcspTransport:!!(S.chars.ae01&&S.chars.ae02),batteryService:!!S.chars['2a19']},auth:{ok:false,keyProfile:null},
+  S.P={deviceId:S.dev.id,name:S.dev.name||null,advertisedName:S.dev.name||null,chipFamily:'unknown',sdkString:null,fwVersion:null,productName:null,battery:{level:null,charging:null,mode:null},gatt:S.gatt,
+    capabilities:{qixFd00:!!S.chars.fd00,rcspOta:false,rcspOtaProbe:false,rcspOtaObserved:false,
+      rcspTransport:!!(S.chars.ae01&&S.chars.ae02),batteryService:!!S.chars['2a19']},auth:{ok:false,keyProfile:null},
     testModeSuspected:!!S.flags.testMode,profileId:null,capturedAt:null,bootMarker:false,display:null,mac:null,targetInfo:null,sysInfo:null,decoded:null,
     unsupported:[],transport:{rcsp:!!(S.chars.ae01&&S.chars.ae02),sideband:!!(S.chars.fd01&&S.chars.fd02&&S.chars.fd03),qixFd00:!!S.chars.fd00},
     variant:null,charIds:Object.keys(S.chars).sort()};
@@ -28,8 +29,6 @@ async function collectMeta(){
   await step('passive',()=>sleep(Math.min(600,left())));
   await step('auth',async()=>{S.P.auth=await authHandshake(left())});
   if(S.P.auth.ok){
-    await step('feature_map',async()=>{const r=await rcspCmd(0x02,[],left(),{note:'target_feature_map 0x02'});if(r.kind==='fe-response'&&r.status===0&&r.payload.length>=4){
-      S.P.featureMap={mask:be32(r.payload),decoded:decodeFeatureMap(be32(r.payload))}}});
     await step('bootstrap',async()=>{const r=await bootstrapFull(Math.min(1500,left()));S.boot=true;log('EV','',null,'bootstrap '+JSON.stringify(r))})}
   else{if(S.set.rcspPreAuth){
       await step('0x03',()=>req('ae01',fe(0xC0,0x03,[nextSN(),0xFF,0xFF,0xFF,0xFF,0x01]),(k,u)=>k==='ae02'&&isFE(u,0x03),'target_info (pre-auth)',left()));
@@ -41,6 +40,9 @@ async function collectMeta(){
   S.P.chipFamily=familyOf(S.P.sdkString);S.P.profileId=matchProfile(S.P,S.profiles);
   S.P.variant=S.P.capabilities.qixFd00?'Qix characteristic + RCSP AE00':S.P.transport.sideband?'FD01–FD05 sideband + RCSP AE00':'RCSP AE00 only';
   const profile=S.P.profileId&&S.profiles[S.P.profileId];
+  const receiverMode=!!(profile&&profile.mode==='receiver')||/^Q87/i.test(S.dev&&S.dev.name||S.P.name||'');
+  S.P.mode=receiverMode?'receiver':profile&&profile.mode||'standard';
+  S.P.capabilities.rcspOta=!!(S.P.capabilities.rcspOtaObserved&&!receiverMode);
   S.P.unsupported=profile&&profile.unsupported?profile.unsupported.slice():[];
   S.P.fileTransfer=S.P.decoded&&S.P.decoded.targetInfo&&S.P.decoded.targetInfo.fields.fileTransfer?
     S.P.decoded.targetInfo.fields.fileTransfer.hex:null;

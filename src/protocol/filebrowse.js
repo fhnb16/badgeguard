@@ -45,22 +45,23 @@ async function browseAll({deep=true,maxDepth=3,readNum=32}={}){
       BROWSE.tree.push(node);renderLab();
       if(!root.ok){log('EV','',null,`browse ${DEV_HANDLERS[dev]}: ${root.reason}`);continue}
       log('EV','',null,`browse ${DEV_HANDLERS[dev]}: ${root.entries.length} записей (${root.bytes} Б, push=${root.pushes})`);
-      await walk(node,root.entries,[],1);
+      await walk(node,root.entries,[],1,node.dev);
     }
-    BROWSE.manifest=await buildResourcesManifest();
+    BROWSE.manifest=await buildResourcesManifest();S.resManifest=BROWSE.manifest;
     log('EV','',null,`browse готов: ${BROWSE.files.length} файлов, ${Date.now()-t0} мс`);
     return BROWSE}
   finally{BROWSE.running=false;renderLab()}
-  async function walk(node,entries,path,depth){
+  async function walk(node,entries,path,depth,deviceHandler){
     for(const e of entries){
       if(S.abort)return;
       const full=[...path,e.name].join('/');
-      if(e.isFile){const f={...e,path:full,dev,node};node.files.push(f);BROWSE.files.push(f);continue}
-      node.children.push({...e,path:full,children:[],files:[]});
+      const entryDevice=DEV_HANDLERS[e.devIndex]?e.devIndex:deviceHandler;
+      if(e.isFile){const f={...e,path:full,dev:entryDevice,node};node.files.push(f);BROWSE.files.push(f);continue}
+      const sub={...e,path:full,dev:entryDevice,children:[],files:[]};
+      node.children.push(sub);
       if(!deep||depth>=maxDepth)continue;
-      const sub=node.children[node.children.length-1];
-      const r=await browseOnce({type:1,devHandler:e.devIndex!=null?dev:dev,readNum,clusters:[e.cluster]});
-      if(r.ok&&r.entries.length){log('EV','',null,`  ${full}: ${r.entries.length} записей`);await walk(sub,r.entries,[...path,e.name],depth+1)}
+      const r=await browseOnce({type:1,devHandler:entryDevice,readNum,clusters:[e.cluster]});
+      if(r.ok&&r.entries.length){log('EV','',null,`  ${full}: ${r.entries.length} записей`);await walk(sub,r.entries,[...path,e.name],depth+1,entryDevice)}
       else if(!r.ok)log('EV','',null,`  ${full}: ${r.reason}`);
       renderLab()}}}
 
@@ -83,16 +84,60 @@ async function readSmallFile(e,{offset=0,len=null}={}){
   if(r.status!==0)return{ok:false,error:'RCSP '+statusName(r.status),data:new Uint8Array(0)};
   return parseSmallFileRead(r.payload||new Uint8Array(0))}
 
-/* Выгрузка: для каждого файла — small read по id; пишем sha256 и собираем манифест. */
+const MAX_BROWSE_FILE_BYTES=16*1024*1024;
+function browseReadQueue(){
+  const q=[];let wake=null;
+  const un=rcspHook(i=>{
+    if(i.cmd===0x01&&i.xmOp===0x24){q.push({kind:'data',frame:i});if(wake){const f=wake;wake=null;f()}return true}
+    if(i.cmd===0x24&&i.payload&&i.payload[0]===0x80){q.push({kind:'finish',frame:i});if(wake){const f=wake;wake=null;f()}}
+    return false});
+  return{un,async next(ms){const end=Date.now()+ms;
+    while(!q.length&&Date.now()<end&&!S.abort)await new Promise(r=>{wake=r;setTimeout(()=>{if(wake===r)wake=null;r()},Math.min(60,Math.max(1,end-Date.now())))});
+    return q.shift()||null}}}
+
+async function readBrowseFile(e){
+  if(!S.P||!S.P.auth.ok||S.conn!=='on'||!S.gattReady)throw new Error('нужна подключённая авторизованная сессия');
+  const dev=e.devHandler??e.dev,cluster=e.cluster;
+  if(!Number.isInteger(dev)||!DEV_HANDLERS[dev])throw new Error('неизвестный файловый дескриптор');
+  if(!Number.isInteger(cluster)||cluster<0||cluster>0xFFFFFFFF)throw new Error('неверный cluster файла');
+  const Q=browseReadQueue();
+  try{
+    const body=Uint8Array.of(0x01,(dev>>>24)&255,(dev>>>16)&255,(dev>>>8)&255,dev&255,0,0,0,0,
+      (cluster>>>24)&255,(cluster>>>16)&255,(cluster>>>8)&255,cluster&255);
+    const r=await rcspCmd(0x24,body,S.set.reqTo,{note:`file return ${e.path||e.name} cluster=${hx(cluster)}`});
+    if(r.kind==='timeout')return{ok:false,error:'timeout',data:new Uint8Array(0)};
+    if(r.status!==0)return{ok:false,error:'RCSP '+statusName(r.status),data:new Uint8Array(0)};
+    if(!r.payload||r.payload.length<5||r.payload[0]!==0x01)return{ok:false,error:'unexpected 0x24 size response',data:new Uint8Array(0)};
+    const size=be32(r.payload,1);
+    if(size>MAX_BROWSE_FILE_BYTES)return{ok:false,error:`file exceeds ${MAX_BROWSE_FILE_BYTES} byte limit`,data:new Uint8Array(0)};
+    const data=new Uint8Array(size);let offset=0,crc=0;
+    for(;;){
+      if(S.abort)return{ok:false,error:'aborted',data:new Uint8Array(0)};
+      const item=await Q.next(Math.max(10000,S.set.browseTo));
+      if(!item)return{ok:false,error:'transfer timeout',data:new Uint8Array(0)};
+      if(item.kind==='finish'){
+        if(offset!==size)return{ok:false,error:`incomplete transfer (${offset}/${size})`,data:new Uint8Array(0)};
+        return{ok:true,size,crc16:crc,data}}
+      const p=item.frame.payload||new Uint8Array(0);
+      if(p.length<7)return{ok:false,error:'short 0x24 data frame',data:new Uint8Array(0)};
+      const frameOffset=be32(p),frameCrc=be16(p,4),chunk=p.subarray(6);
+      if(frameOffset!==offset||!chunk.length||offset+chunk.length>size)return{ok:false,error:`invalid 0x24 chunk at ${hx(frameOffset)}`,data:new Uint8Array(0)};
+      const nextCrc=crc16(chunk,crc);
+      if(nextCrc!==frameCrc)return{ok:false,error:`0x24 CRC mismatch at ${hx(offset)}`,data:new Uint8Array(0)};
+      data.set(chunk,offset);offset+=chunk.length;crc=nextCrc}
+  }finally{Q.un()}}
+
+/* Выгрузка: browse-файлы возвращаются по cluster через 0x24, watch-файлы — через 0x28. */
 async function fetchResources({limit=0}={}){
   if(!BROWSE.files.length&&!S.smallFiles.length)throw new Error('сначала выполните обход (browse / small files)');
-  const targets=[...BROWSE.files.map(f=>({id:f.id,type:1,typeName:'file',name:f.path,size:f.size,src:'browse'})),
+  const targets=[...BROWSE.files.map(f=>({id:f.id,type:1,typeName:'file',name:f.path,size:f.size,cluster:f.cluster,devHandler:f.dev,
+      nameHex:f.nameHex,nameEncoding:f.nameEncoding,nameAlternate:f.nameAlternate,nameAlternateEncoding:f.nameAlternateEncoding,src:'browse'})),
     ...S.smallFiles.map(f=>({id:f.id,type:f.type,typeName:f.typeName,name:`${f.typeName}/${f.id}.bin`,size:f.size,src:'0x28'}))];
   const list=limit?targets.slice(0,limit):targets;
   S.res=[];S.abort=false;S.prog={done:0,total:list.length,t0:performance.now(),start:0,win:0};
   for(const t of list){
     if(S.abort)break;
-    try{const r=await readSmallFile(t);
+    try{const r=t.src==='browse'?await readBrowseFile(t):await readSmallFile(t);
       if(r.ok&&r.data.length){const sha=await sha256hex(r.data);
         S.res.push({...t,bytes:r.data.length,sha256:sha,crc16:r.crc16,crcOk:r.crc16!=null?crc16(r.data)===r.crc16:null,data:r.data,variant:r.variant});
         log('EV','',null,`fs get ${t.name}: ${r.data.length} Б sha256=${sha.slice(0,12)}… crc=${hx(r.crc16)}`)}
@@ -104,13 +149,18 @@ async function fetchResources({limit=0}={}){
 
 async function buildResourcesManifest(){
   const items=[];
-  for(const r of S.res||[])items.push({name:r.name,path:r.name,source:r.src,type:r.type,id:r.id,bytes:r.bytes,sha256:r.sha256,crc16:r.crc16==null?null:hx(r.crc16),crcVerified:r.crcOk});
+  for(const r of S.res||[])items.push({name:r.name,path:r.name,source:r.src,type:r.type,id:r.id,cluster:r.cluster??null,
+    nameHex:r.nameHex??null,nameEncoding:r.nameEncoding??null,nameAlternate:r.nameAlternate??null,nameAlternateEncoding:r.nameAlternateEncoding??null,
+    bytes:r.bytes,sha256:r.sha256,crc16:r.crc16==null?null:hx(r.crc16),crcVerified:r.crcOk});
   return{artifact:'resources-manifest.json',generatedAt:new Date().toISOString(),
     device:S.P?{deviceId:S.P.deviceId,name:S.P.name,fwVersion:S.P.fwVersion,profileId:S.P.profileId,chipFamily:S.P.chipFamily}:null,
-    transport:'RCSP AE00 (0x0C browse + 0x28 small-file read)',
+    transport:'RCSP AE00 (0x0C browse + 0x24 cluster return + 0x28 small-file read)',
     note:'ресурсы прошивки (циферблаты/картинки/шрифты/конфиги). Код прошивки, uboot и chipkey этим путём НЕ доступны.',
-    browseTree:BROWSE.tree.map(n=>({dev:n.devName,ok:n.ok,reason:n.reason,files:n.files.map(f=>({path:f.path,id:f.id,cluster:f.cluster})),
-      children:n.children.map(c=>({path:c.path,cluster:c.cluster,files:c.files.map(f=>({path:f.path,id:f.id}))}))})),
+    browseTree:BROWSE.tree.map(n=>({dev:n.devName,ok:n.ok,reason:n.reason,files:n.files.map(f=>({path:f.path,id:f.id,cluster:f.cluster,nameHex:f.nameHex,nameEncoding:f.nameEncoding,
+        nameAlternate:f.nameAlternate,nameAlternateEncoding:f.nameAlternateEncoding})),
+      children:n.children.map(c=>({path:c.path,cluster:c.cluster,nameHex:c.nameHex,nameEncoding:c.nameEncoding,nameAlternate:c.nameAlternate,
+        nameAlternateEncoding:c.nameAlternateEncoding,files:c.files.map(f=>({path:f.path,id:f.id,cluster:f.cluster,nameHex:f.nameHex,nameEncoding:f.nameEncoding,
+          nameAlternate:f.nameAlternate,nameAlternateEncoding:f.nameAlternateEncoding}))}))})),
     count:items.length,items}}
 
 /* ZIP без зависимостей (store, без сжатия) — чтобы выгрузить ресурсы одним файлом */

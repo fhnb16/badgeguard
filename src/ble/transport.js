@@ -1,7 +1,7 @@
 /* ===== BLE transport =====
  * GATT E87 сверен с qix-ble service.py: сервис C2E6FD00 = Qix-sideband (TX FD02, RX FD01/FD03) — характеристика FD00 не обнаружена на E87;
  * AE00 = RCSP (TX AE01, RX AE02). FD05 не подписываем: по qix-ble это ломает REQ_UPDATE (silent reject). 2A19 на этой прошивке пустой. */
-const NAMES=['E87','E92','L8','X9','LED Badge','EC-BADGE'];
+const NAMES=['E87','E92','L8','X9','Q87','LED Badge','EC-BADGE'];
 const SVC={ae00:'0000ae00-0000-1000-8000-00805f9b34fb',fd:'c2e6fd00-e966-1000-8000-bef9c223df6a'};
 const OPT=[SVC.ae00,SVC.fd,'battery_service','generic_access'];
 const NOTIFY=['ae02','fd01','fd03'];
@@ -36,6 +36,11 @@ function onFrame(k,u){if(!S.P)return;
     if(f.cmd===0xC7)S.P.display=decodeC7(f.payload);
     // push после bootstrap: cmd 0x27 [mode, percent] (qix-ble battery.py); mode 1 ≈ зарядка — не подтверждено, в R-BATT не используем
     else if(f.cmd===0x27&&f.len===2){S.P.battery.level=f.payload[1];S.P.battery.mode=f.payload[0];S.battAt=Date.now();render()}}
+  else if(k==='ae02'&&u[0]===0xFE&&u[3]===0xC0&&u[4]===0xE5){
+    S.P.capabilities.rcspOtaObserved=true;
+    const receiver=S.P.mode==='receiver'||/^Q87/i.test(S.dev&&S.dev.name||S.P.name||'');
+    S.P.capabilities.rcspOta=!receiver;
+    log('EV',k,u,`OTA pull request observed${receiver?' in receiver mode':''}; transfer remains gated`);render()}
   else if(isFE(u,0x03)||isFE(u,0x07)){const r=parseRcspResp(u);if(!r||r.status!==0)return;
     if(r.cmd===0x03){const attrs=parseTlv(r.data),ti=decodeTargetInfo(attrs);S.P.targetInfo=ti;S.P.decoded={...(S.P.decoded||{}),targetInfo:decodeTargetInfo2(attrs)};
       if(ti.edr_addr)S.P.mac=ti.edr_addr;if(ti.fw_version&&!S.P.fwVersion)S.P.fwVersion=ti.fw_version}
