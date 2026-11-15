@@ -56,21 +56,21 @@ function buildOtaApiRequest(endpointId,model,version){
   const safeModel=clean(model,'model');
   if(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{16}$/.test(safeModel))throw new Error('model похож на authKey и не будет отправлен');
   return{endpointId,model:safeModel,version:clean(version,'version')}}
-function normalizeOtaHelperUrl(value){
-  let url;try{url=new URL(String(value||'').trim())}catch{throw new Error('Укажите полный URL PHP-помощника')}
-  const host=url.hostname.toLowerCase(),local=['127.0.0.1','localhost','[::1]','::1'].includes(host);
-  if(url.protocol!=='https:'&&!(url.protocol==='http:'&&local))throw new Error('Удалённый PHP-помощник должен использовать HTTPS');
+function normalizeOtaHelperUrl(value,base=globalThis.location?.href||'http://127.0.0.1:8765/'){
+  let url,page;try{page=new URL(base);url=new URL(String(value||'').trim(),page)}catch{throw new Error('Укажите URL PHP-помощника')}
+  const host=url.hostname.toLowerCase(),local=['127.0.0.1','localhost','[::1]','::1'].includes(host),sameOrigin=url.origin===page.origin;
+  if(url.protocol!=='https:'&&!(url.protocol==='http:'&&local&&page.protocol==='http:'))throw new Error('Удалённый PHP-помощник должен использовать HTTPS');
   if(url.username||url.password||url.search||url.hash||!url.pathname.endsWith('/ota-helper.php'))throw new Error('URL должен указывать на ota-helper.php без логина, query и fragment');
-  return{url:url.href,remote:!local}}
+  return{url:url.href,remote:!sameOrigin}}
 async function requestOtaApiCheck({helperUrl,token,endpointId,model,version}){
   if(OTA_API_REQUEST.running)throw new Error('OTA API-запрос уже выполняется');
-  const target=normalizeOtaHelperUrl(helperUrl),payload=buildOtaApiRequest(endpointId,model,version),secret=String(token||'').trim();
+  const target=normalizeOtaHelperUrl(helperUrl,location.href),payload=buildOtaApiRequest(endpointId,model,version),secret=String(token||'').trim();
   if(target.remote&&secret.length<32)throw new Error('Для удалённого helper нужен токен не короче 32 символов');
   OTA_API_REQUEST.running=true;renderLab();
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
   try{
     const headers={'Content-Type':'application/json'};
-    if(secret)headers['X-BadgeGuard-Helper-Token']=secret;
+    if(target.remote)headers['X-BadgeGuard-Helper-Token']=secret;
     const response=await fetch(target.url,{method:'POST',headers,body:JSON.stringify(payload),credentials:'omit',
       cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',signal:controller.signal});
     const result=await response.json().catch(()=>null);

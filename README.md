@@ -11,16 +11,16 @@ The project has no JavaScript runtime dependencies. Build locally with `node bui
 
 The device tools include a manual, single-request checker for the listed ZRun/Zijun endpoints. It never loops through endpoints, retries automatically, sends `authKey` or uploads a firmware image. Candidate JieLi URLs are displayed but disabled because their request schema is unknown; repository and app-store links are not API endpoints. A returned download URL is shown for an explicit user click and is never flashed automatically.
 
-The checker calls the root-level `ota-helper.php`, which makes one HTTPS POST to a fixed endpoint allowlist. Keep it beside `dist/` and `dist-single/`. To use it locally, set `BADGEGUARD_OTA_AES_KEY` in the environment to the 16-byte app key from a source you are authorized to use, then serve the repository root on loopback:
+The source `ota-helper.php` is at the repository root; the build copies it beside `index.html` in both `dist/` and `dist-single/`. It makes one HTTPS POST to a fixed endpoint allowlist. To use it locally, set `BADGEGUARD_OTA_AES_KEY` in the environment to the 16-byte app key from a source you are authorized to use, then serve either distribution on loopback:
 
 ```powershell
 $env:BADGEGUARD_OTA_AES_KEY = "<configured locally; do not commit>"
-php -S 127.0.0.1:8765 -t .
+php -S 127.0.0.1:8765 -t dist
 ```
 
-Open `http://127.0.0.1:8765/dist/` or `/dist-single/` and expand the cloud OTA checker. PHP's OpenSSL extension is required. The key is intentionally not bundled in the repository. The app sends only the selected endpoint ID, `model`, and `version` to the helper; do not enter the device auth key as `model`.
+Open `http://127.0.0.1:8765/` and expand the cloud OTA checker. For `dist-single/`, run the same command with `-t dist-single`. A relative `ota-helper.php` URL is the default and needs no helper token when the page and helper share an origin. PHP's OpenSSL extension is required. The key is intentionally not bundled in the repository. The app sends only the selected endpoint ID, `model`, and `version` to the helper; do not enter the device auth key as `model`.
 
-For a remote PHP helper, configure `BADGEGUARD_OTA_AES_KEY`, `BADGEGUARD_OTA_ALLOWED_ORIGIN` (the exact BadgeGuard origin), and a random `BADGEGUARD_OTA_HELPER_TOKEN` of at least 32 characters. Enter the helper's HTTPS URL and token in the app. Do not expose the helper without both origin and token settings. The PHP helper has no arbitrary-URL proxy feature and only accepts endpoint IDs in its source allowlist.
+For a cross-origin remote PHP helper, configure `BADGEGUARD_OTA_AES_KEY`, `BADGEGUARD_OTA_ALLOWED_ORIGIN` (the exact BadgeGuard origin), and a random `BADGEGUARD_OTA_HELPER_TOKEN` of at least 32 characters. Enter the helper's HTTPS URL and token in the app. Do not expose the helper without both origin and token settings. The PHP helper has no arbitrary-URL proxy feature and only accepts endpoint IDs in its source allowlist.
 
 ## Confirmed AC697x / BR30 behavior
 

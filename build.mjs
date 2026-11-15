@@ -12,6 +12,8 @@ const page=pwa=>src('shell.html').replace('%CSP%',CSP(pwa))
   .replace('%HEAD%',pwa?'<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg"><meta name="theme-color" content="#111A2E">':'')
   .replace('%CSS%',()=>src('styles.css')).replace('%JS%',()=>js);
 const single=page(false),pwa=page(true),ver=createHash('sha256').update(pwa).digest('hex').slice(0,12);
+const helper=readFileSync(new URL('ota-helper.php',root),'utf8');
 out('dist-single/index.html',single);out('dist/index.html',pwa);out('dist/sw.js',src('pwa/sw.js').replace('%VERSION%',ver));
+out('dist-single/ota-helper.php',helper);out('dist/ota-helper.php',helper);
 for(const f of['manifest.webmanifest','icon.svg'])out('dist/'+f,src('pwa/'+f));
 console.log(`dist-single/index.html ${(single.length/1024).toFixed(1)} KB · dist/ PWA (sw ${ver})`);

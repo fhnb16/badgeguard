@@ -193,8 +193,8 @@
         </datalist>
       </div>
       <div class="lab__row">
-        <label class="ota-api__helper"><span data-i18n="otaApiHelper"></span><input id="otaApiHelperUrl" type="url" value="http://127.0.0.1:8765/ota-helper.php" autocomplete="off"></label>
-        <label class="ota-api__token"><span data-i18n="otaApiToken"></span><input id="otaApiHelperToken" type="password" autocomplete="off"></label>
+        <label class="ota-api__helper"><span data-i18n="otaApiHelper"></span><input id="otaApiHelperUrl" type="text" value="ota-helper.php" autocomplete="off"></label>
+        <label id="otaApiTokenField" class="ota-api__token" hidden><span data-i18n="otaApiToken"></span><input id="otaApiHelperToken" type="password" maxlength="256" autocomplete="off"></label>
         <button id="btnOtaApiCheck" class="btn" disabled data-i18n="otaApiSend"></button>
       </div>
       <label class="chk"><input id="otaApiConsent" type="checkbox"><span data-i18n="otaApiConsent"></span></label>

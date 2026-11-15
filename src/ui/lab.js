@@ -22,6 +22,7 @@ function bindLab(){
   action('#btnOtaProbe',async()=>{if(!labConnected())throw new Error('Подключите устройство и пройдите auth');if(labBusy())throw new Error('Другая операция уже выполняется');await otaProbe()});
   $('#otaApiConsent').addEventListener('change',renderLab);
   $('#otaApiEndpoint').addEventListener('change',renderLab);
+  $('#otaApiHelperUrl').addEventListener('input',renderLab);
   $('#btnOtaApiCheck').onclick=async()=>{
     if(!$('#otaApiConsent').checked)return toast(t('otaApiConsent'),'warn');
     $('#otaApiResult').textContent='…';$('#otaApiDownload').hidden=true;
@@ -48,6 +49,8 @@ function renderLab(){
   $('#btnExportMatrix').disabled=false;
   const otaEndpoint=otaApiEndpoint($('#otaApiEndpoint').value);
   $('#otaApiEndpointUrl').textContent=otaEndpoint?otaEndpoint.url:'—';
+  let helperTarget=null;try{helperTarget=normalizeOtaHelperUrl($('#otaApiHelperUrl').value,location.href)}catch{}
+  $('#otaApiTokenField').hidden=!helperTarget||!helperTarget.remote;
   const rows=[
     S.labScreen&&`screen: ${JSON.stringify(S.labScreen)}`,
     S.health&&`health (SDK stub): ${JSON.stringify(S.health)}`,

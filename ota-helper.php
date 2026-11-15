@@ -85,12 +85,18 @@ function ota_authorize(): void
         return;
     }
 
-    $host = parse_url('http://' . ($_SERVER['HTTP_HOST'] ?? ''), PHP_URL_HOST) ?: '';
+    $hostHeader = $_SERVER['HTTP_HOST'] ?? '';
+    $host = parse_url('http://' . $hostHeader, PHP_URL_HOST) ?: '';
     $remote = $_SERVER['REMOTE_ADDR'] ?? '';
-    $originHost = $origin !== '' ? (parse_url($origin, PHP_URL_HOST) ?: '') : '';
-    if (!ota_is_loopback($host) || !ota_is_loopback($remote) || ($originHost !== '' && !ota_is_loopback($originHost))) {
-        ota_json(403, ['ok' => false, 'error' => 'local helper accepts loopback connections only']);
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (int)($_SERVER['SERVER_PORT'] ?? 0) === 443;
+    $scheme = $https ? 'https' : 'http';
+    $serverOrigin = strtolower($scheme . '://' . $hostHeader);
+    $sameOrigin = $origin !== '' && hash_equals($serverOrigin, strtolower($origin));
+    $loopback = ota_is_loopback($host) && ota_is_loopback($remote);
+    if (($sameOrigin && ($https || $loopback)) || ($origin === '' && $loopback)) {
+        return;
     }
+    ota_json(403, ['ok' => false, 'error' => 'cross-origin remote helper requires origin and token configuration']);
 }
 
 function ota_headers(): array

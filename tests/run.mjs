@@ -18,9 +18,11 @@ res.push(...vm.runInThisContext(`(()=>{
       if(!blocked)throw Error('unverified endpoint accepted')
     }),
     check('OTA helper URL requires HTTPS except loopback',()=>{
-      if(normalizeOtaHelperUrl('http://127.0.0.1:8765/ota-helper.php').remote)throw Error('loopback not recognized');
-      if(!normalizeOtaHelperUrl('https://helper.example/ota-helper.php').remote)throw Error('remote helper not recognized');
-      let blocked=false;try{normalizeOtaHelperUrl('http://helper.example/ota-helper.php')}catch{blocked=true}
+      const base='http://127.0.0.1:8765/dist/';
+      if(normalizeOtaHelperUrl('ota-helper.php',base).remote)throw Error('relative same-origin helper not recognized');
+      if(!normalizeOtaHelperUrl('../ota-helper.php',base).url.endsWith('/ota-helper.php'))throw Error('relative parent path rejected');
+      if(!normalizeOtaHelperUrl('https://helper.example/ota-helper.php','https://badgeguard.example/').remote)throw Error('remote helper not recognized');
+      let blocked=false;try{normalizeOtaHelperUrl('http://helper.example/ota-helper.php','https://badgeguard.example/')}catch{blocked=true}
       if(!blocked)throw Error('remote HTTP helper accepted')
     })
   ];
