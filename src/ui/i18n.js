@@ -28,5 +28,13 @@ const T={conn:['Подключить','Connect'],disc:['Отключить','Dis
   e_ota1:['REQ_UPDATE отвергнут — вероятно TEST_MODE. Выключите/включите бейдж и нажмите «Я сделал(а) power-cycle».','REQ_UPDATE rejected — likely TEST_MODE. Power-cycle the badge and press “I power-cycled”.'],
   e_bond:['Обрыв на первой записи — вероятно устаревшее сопряжение. Удалите бейдж из сопряжённых в ОС и подключитесь заново.','Link dropped on first write — likely a stale bond. Remove the badge from OS pairings and reconnect.'],
   e_ota4:['Бейдж не вернулся после apply. НЕ прошивайте повторно вслепую. Восстановление — только USB-ISP вне приложения. Прошивка заблокирована до перезагрузки страницы.','Badge did not return after apply. Do NOT retry blindly. Recovery is USB-ISP only. Flashing locked until page reload.'],
+  deviceTools:['Диагностика и функции устройства','Device diagnostics and tools'],probeTransport:['Транспорт','Transport'],probeFrame:['Полный hex-кадр','Full hex frame'],
+  probeTimeout:['Окно ответа, мс','Response window, ms'],sendProbe:['Отправить read-only probe','Send read-only probe'],
+  probeSafety:['Только подключённое устройство. Raw Probe ограничен известными read-only командами; общий скан опкодов и команды записи не отправляются. ACK 9E 0xFF сам по себе не подтверждает исполнение.','Connected device only. Raw Probe is limited to known read-only commands; opcode sweeps and write commands are not sent. A 9E 0xFF ACK alone does not confirm execution.'],
+  browseFiles:['Обойти файловые устройства','Browse file devices'],smallFiles:['Список малых файлов','List small files'],
+  fetchResources:['Скачать найденное','Fetch listed resources'],exportResources:['Экспорт ZIP','Export ZIP'],
+  otaProbe:['Read-only OTA probe','Read-only OTA probe'],readScreen:['Прочитать экран','Read screen'],
+  readHealth:['Проверить health (заглушка)','Read health (stub)'],syncTime:['Синхронизировать время','Sync time'],
+  contentImage:['Изображение для отправки','Image to send'],sendImage:['Отправить изображение','Send image'],
   ok_done:['Прошивка завершена и подтверждена','Flash complete and verified'],meta:['Паспорт собран','Passport captured'],imgOk:['Образ разобран','Image parsed']};
 const t=k=>(T[k]||[k])[S.set.lang==='en'?1:0];

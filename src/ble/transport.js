@@ -1,5 +1,5 @@
 /* ===== BLE transport =====
- * GATT E87 сверен с qix-ble service.py: сервис C2E6FD00 = Qix-sideband (TX FD02, RX FD01/FD03) — характеристики FD00 НЕТ ни у одного E87;
+ * GATT E87 сверен с qix-ble service.py: сервис C2E6FD00 = Qix-sideband (TX FD02, RX FD01/FD03) — характеристика FD00 не обнаружена на E87;
  * AE00 = RCSP (TX AE01, RX AE02). FD05 не подписываем: по qix-ble это ломает REQ_UPDATE (silent reject). 2A19 на этой прошивке пустой. */
 const NAMES=['E87','E92','L8','X9','LED Badge','EC-BADGE'];
 const SVC={ae00:'0000ae00-0000-1000-8000-00805f9b34fb',fd:'c2e6fd00-e966-1000-8000-bef9c223df6a'};
@@ -29,7 +29,7 @@ function onRx(e){const v=e.target.value,u=new Uint8Array(v.buffer.slice(v.byteOf
   const take=k==='fd01'||k==='fd03'||k==='fd05'?qixTake:k==='ae02'&&(u[0]===0xFE||rxBuf.ae02&&rxBuf.ae02.length)?feTake:null;
   if(!take)return dispatch(k,u);
   let b=cat(rxBuf[k],u);for(;;){const r=take(b);b=r.rest;if(r.skipped)log('EV',k,null,`skipped ${r.skipped} B`);if(!r.frame)break;dispatch(k,r.frame)}rxBuf[k]=b}
-function dispatch(k,u){log('RX',k,u,decode(k,u));sniff(u);onFrame(k,u);
+function dispatch(k,u){log('RX',k,u,decode(k,u));sniff(u);onFrame(k,u);rcspRoute(k,u);
   S.waiters=S.waiters.filter(x=>{if(x.pred(k,u)){x.res({k,u});return false}return true})}
 function onFrame(k,u){if(!S.P)return;
   if(u[0]===0x9E){const f=parse9E(u);if(!f)return;
@@ -37,8 +37,10 @@ function onFrame(k,u){if(!S.P)return;
     // push после bootstrap: cmd 0x27 [mode, percent] (qix-ble battery.py); mode 1 ≈ зарядка — не подтверждено, в R-BATT не используем
     else if(f.cmd===0x27&&f.len===2){S.P.battery.level=f.payload[1];S.P.battery.mode=f.payload[0];S.battAt=Date.now();render()}}
   else if(isFE(u,0x03)||isFE(u,0x07)){const r=parseRcspResp(u);if(!r||r.status!==0)return;
-    if(r.cmd===0x03){const ti=decodeTargetInfo(parseTlv(r.data));S.P.targetInfo=ti;if(ti.edr_addr)S.P.mac=ti.edr_addr;if(ti.fw_version&&!S.P.fwVersion)S.P.fwVersion=ti.fw_version}
-    else S.P.sysInfo=Object.fromEntries(parseTlv(r.data.subarray(1)).map(a=>['attr_'+a.type,hex(a.data,'')]));render()}}
+    if(r.cmd===0x03){const attrs=parseTlv(r.data),ti=decodeTargetInfo(attrs);S.P.targetInfo=ti;S.P.decoded={...(S.P.decoded||{}),targetInfo:decodeTargetInfo2(attrs)};
+      if(ti.edr_addr)S.P.mac=ti.edr_addr;if(ti.fw_version&&!S.P.fwVersion)S.P.fwVersion=ti.fw_version}
+    else{const attrs=parseTlv(r.data.subarray(1));S.P.sysInfo=Object.fromEntries(attrs.map(a=>['attr_'+a.type,hex(a.data,'')]));
+      S.P.decoded={...(S.P.decoded||{}),sysInfo:decodeSysInfo2(attrs)}}render()}}
 function sniff(u){if(!S.P)return;const s=ascii(u),sdk=s.match(/jl_sdk_ac\w+/),ver=s.match(/\d+\.\d+\.\d+\.\d+\.\d+/);
   if(sdk)S.P.sdkString=sdk[0];if(ver)S.P.fwVersion=ver[0];if(/BADGE-FWMARK/.test(s))S.P.bootMarker=true}
 
@@ -67,9 +69,8 @@ async function gattUp(){
 async function onDisc(){S.gattReady=false;S.boot=false;S.waiters.forEach(x=>x.rej(new Error('disconnected')));S.waiters=[];
   log('EV','',null,'disconnected');if(S.phase==='transferring'||S.phase==='resuming')S.phase='paused';setConn('off');
   if(S.userDisc||S.reconnecting)return;S.reconnecting=true;const dev=S.dev;
-  try{for(let i=0;i<7;i++){await sleep(Math.min(16000,1000*2**i));if(S.userDisc||S.dev!==dev)return; // новый Connect отменяет старый цикл
-    try{await gattUp();return}catch(e){log('EV','',null,`reconnect ${i+1} ✕ ${e.message}`)}}
-    toast(t('e_reconn'),'block')}finally{S.reconnecting=false}}
+  try{await sleep(2500);if(S.userDisc||S.dev!==dev)return;toast(t('e_reconn'),'block')}
+  finally{S.reconnecting=false}}
 async function waitConn(want,ms){const end=Date.now()+ms;while(Date.now()<end){if(want?S.gattReady&&S.dev.gatt.connected:!S.dev.gatt.connected)return true;await sleep(300)}return false}
 function disconnect(){S.userDisc=true;if(S.dev&&S.dev.gatt.connected)S.dev.gatt.disconnect();S.gattReady=false;S.boot=false;setConn('off')}
 // Батарея: свежий push 0x27 (триггер — 0x29 [80], как в bootstrap phase 5); стандартный 2A19 — последний шанс

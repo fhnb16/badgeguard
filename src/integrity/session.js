@@ -58,7 +58,8 @@ async function certifyWired(){
   try{download('dump.cert.json',await certify(new Uint8Array(S.buf),S.P,dumpProf(S.buf.byteLength),'wired-uboot'))}catch(e){toast('cert: '+e.message,'block')}}
 
 // причины, по которым дамп недоступен — показываются под кнопками вместо «серой» без объяснений
-const dumpBlockers=()=>[S.conn!=='on'&&'h_conn',!(S.P&&S.P.auth.ok)&&'h_auth',!S.boot&&'h_boot',ACTIVE.includes(S.phase)&&'h_busy',!READBACK.ready&&'h_port'].filter(Boolean);
+const dumpBlockers=()=>[S.conn!=='on'&&'h_conn',!(S.P&&S.P.auth.ok)&&'h_auth',!S.boot&&'h_boot',ACTIVE.includes(S.phase)&&'h_busy',
+  S.P&&S.P.unsupported&&S.P.unsupported.includes('ble-raw-dump')?'h_dumpUnsupported':!READBACK.ready?'h_port':false].filter(Boolean);
 function renderInt(){
   const r=S.int,c=S.dumpCert,on=S.conn==='on',act=ACTIVE.includes(S.phase),ready=on&&!act&&S.P&&S.P.profileId;
   const sv=x=>x===true?'pass':x===false?'block':'warn';
@@ -76,6 +77,6 @@ function renderInt(){
   $('#btnRb').disabled=!(ready&&S.l0&&S.R&&READBACK.ready);$('#btnRh').disabled=!(ready&&S.l0&&S.R);
   $('#btnAccept').hidden=!(r&&r.verdict==='partial'&&!r.acceptedPartial);$('#btnCopyDig').disabled=!r;
   const db=dumpBlockers();$('#btnDump').disabled=!!db.length;$('#btnSpot').disabled=!!db.length||!S.dumpBuf;
-  $('#dumpHint').textContent=db.length?t('h_dump')+': '+db.map(t).join(', '):'';
+  $('#dumpHint').textContent=db.length?db.map(t).join(' · '):'';
   $('#btnCertWired').disabled=!(S.R&&S.R.kind==='full-dump'&&S.P&&!act);
   $('#btnExpCert').disabled=!c;$('#btnExpInt').disabled=!r}

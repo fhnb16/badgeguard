@@ -7,7 +7,8 @@ const eq=(a,b)=>!!a&&!!b&&a.length===b.length&&a.every((x,i)=>x===b[i]);
 const PROFILES={
   'e87-ac707n':{match:{sdkRegex:'jl_sdk_ac707',gattServices:['ae00','c2e6fd00'],names:['E87','EC-BADGE'],chars:['fd01','fd02','fd03']},family:'AC707N/BR35',ota:true,chipkey:0x9847,
     flash:{size:0x400000,codeSpan:[0,0x17E000],appSlot:0xFC000},ubootSha256Allowlist:[],knownGoodImages:[],expectedForm:null,verifySpan:[0,0xFC000]},
-  'e87-ac697x':{match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC697x/BR30',ota:false},
+  'e87-ac697x':{match:{sdkRegex:'jl_sdk_ac697',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},chip:'AC697N',family:'AC697x/BR30',sdk:'jl_sdk_ac697_publish',authProfile:'B',
+    transport:{rcsp:'AE00',sideband:'FD01-FD05',qixFd00:false},unsupported:['0xA0','0xAA','0xA6','qix-ota','ble-raw-dump'],fileTransfer:'0x00000007',peripherals:0,ota:false},
   'e87-ac701n':{match:{sdkRegex:'jl_sdk_ac701',gattServices:['ae00'],names:['E87','E92','L8','X9','LED Badge']},family:'AC701N/BR28',ota:false}};
 const familyOf=s=>/ac707/.test(s||'')?'AC707N/BR35':/ac697/.test(s||'')?'AC697x/BR30':/ac701/.test(s||'')?'AC701N/BR28':'unknown';
 function matchProfile(P,profiles){
@@ -61,7 +62,7 @@ const RULE_TXT={
   'R-BATT':['Батарея ≥ 30% или зарядка','Battery ≥ 30% or charging'],
   'R-TEST':['TEST_MODE не активен, dump в сессии не было','TEST_MODE inactive, no dump this session'],
   'R-CONN':['Одно соединение, GATT жив, BT телефона выключен','Single link, GATT alive, phone BT off'],
-  'R-DUMP':['Дамп — только свой (паспорт сертификата = устройство) и только через RCSP. Чужой дамп клонирует MAC и имя.','Own dump only (certificate passport = device), RCSP path only. A foreign dump clones MAC and name.'],
+  'R-DUMP':['Дамп — только свой (паспорт сертификата = устройство), полученный проводом.','Dump must belong to this device and be acquired over a wired UBOOT connection.'],
   'R-VER':['Без даунгрейда в одной линейке версий','No downgrade within a version line'],
   'R-HASH':['SHA-256 в known-good allowlist','SHA-256 in known-good allowlist'],
   'R-PROBE':['Не было probe без power-cycle','No probe without power-cycle'],
@@ -87,7 +88,7 @@ function evaluate(P,R,c){
   add('R-TEST',!c.flags.testMode&&!c.flags.dump&&!P.testModeSuspected?'pass':'block',`test=${c.flags.testMode||P.testModeSuspected} dump=${c.flags.dump}`);
   add('R-CONN',c.connected&&c.phoneBtOff?'pass':'block',`gatt=${c.connected} phoneBtOff=${c.phoneBtOff}`);
   const dump=R.kind==='full-dump'||R.containsKeyMac,dc=c.dumpCert,dp=dc&&dc.passport,own=dump&&dp&&dp.deviceId===P.deviceId;
-  add('R-DUMP',!dump?'pass':own&&!qix?'warn':'block',dump?`cert.passport=${dp?dp.deviceId:'—'} device=${P.deviceId} path=${c.path}`:'no dump');
+  add('R-DUMP',!dump?'pass':own&&dc&&dc.method==='wired-uboot'&&!qix?'warn':'block',dump?`cert.passport=${dp?dp.deviceId:'—'} method=${dc&&dc.method||'—'} path=${c.path}`:'no dump');
   add('R-DUMP-INTEG',!dump||dc&&dc.verified===true&&dc.sigOk===true&&dc.dumpSha256===R.sha256?'pass':'block',dump?(dc?`verified=${dc.verified} sig=${dc.sigOk} sha=${dc.dumpSha256===R.sha256}`:'no certificate'):'no dump');
   const v=vcmp(R.version,P.fwVersion);
   add('R-VER',v==null||v<0?'warn':'pass',`${P.fwVersion||'—'} → ${R.version||'—'}`);
@@ -122,6 +123,13 @@ function selfTest(){
   ok('target_info TLV: name / MAC / vid_pid / fw',tlv.name==='test'&&tlv.edr_addr==='12:34:56:78:9a:bc'&&tlv.vid_pid==='vid=0x5B9 pid=0xABCD'&&tlv.fw_version==='1.16.2.28');
   const real=parseRcspResp(fromHex('FE DC BA 00 03 00 7D 00 01 02 00 20 05 01 00 00 00 00 09 02 46 88 00 02 09 DC 0E 00 07 04 00 00 00 04 00 00 03 05 00 01 02 06 0D 03 07 31 30 05 08 00 01 01 00 04 09 00 00 00 05 0A 00 02 00 8B 11 0B 68 45 39 79 66 73 65 58 36 55 64 4B 37 72 46 68 15 0C 6A 6C 5F 73 64 6B 5F 61 63 36 39 37 5F 70 75 62 6C 69 73 68 05 0D 01 10 02 1C 08 11 00 46 88 00 02 09 DC 02 12 00 03 13 04 04 05 15 00 00 00 07 EF')),rt=real&&decodeTargetInfo(parseTlv(real.data));
   ok('target_info from real E87: ac697 / 1.16.2.28 / MAC / auth_key hidden',!!rt&&real.status===0&&rt.project_code==='jl_sdk_ac697_publish'&&rt.fw_version==='1.16.2.28'&&rt.edr_addr.startsWith('46:88:00:02:09:dc')&&rt.ble_addr==='type 0 46:88:00:02:09:dc'&&!/hE9y/.test(JSON.stringify(rt))&&rt.protocol_version==='32'&&rt.uboot_version==='10');
+  const fi=decodeFunctionInfo(Uint8Array.of(0,0,0,0x4E)),dp=decodeDoublePartition(Uint8Array.of(0,1));
+  ok('bitfields: function_info 0x4E = MUSIC/RTC/LINEIN/FMTX; no filebrowse bit',fi.names.join(',')==='MUSIC,RTC,LINEIN,FMTX');
+  ok('bitfields: attr 8 [00 01] means single-bank + loader',dp.known&&!dp.dualBank&&dp.loaderDownload&&dp.passes===2);
+  const common=decodeSysInfo2([{type:5,data:Uint8Array.of(0x41,0x4C,0x4C)}]);
+  ok('sys_info attr 5 uses COMMON_INFO_ATTR_FILE_BROWSE_TYPE',common.attrs[0].name==='COMMON_INFO_ATTR_FILE_BROWSE_TYPE'&&common.attrs[0].dataHex==='414C4C');
+  const generic=classifyFrame('fd03',fromHex('9E 00 00 FF 02 00 AA 00'));
+  ok('response classification: generic ACK is not command success',generic.kind==='generic-ack'&&!isRealResponse(generic));
   if(typeof functionE1test==='function'){const K=fromHex('06775F87918DD423005DF1D8CF0C142B'),M=fromHex('112233332211'),E=i=>hex(functionE1test([...M],[...fromHex(i)],[...K]),'');
     ok('jl-auth: ТЗ-вектор + 3 KAT (2 с железа E87)',[['70B75992E05EA78FEC533BA12979B590','FFE9E6C80CE1F40F5CCEAE20831C5879'],['b6e080ecaff322916d88fad5aa34c2ac','1d8897ac4604d332e8175e81bb292524'],
       ['a53057d376fc0476e5dc68273b5e791e','b3242d82e1df6c545895ecae13b44fea'],['384ac9d8e481e5caaeb8cead20ee8f9e','fe1b5b643a790fdcf585e354dd377b0f']].every(([i,o])=>E(i)===o.toUpperCase()))}
@@ -136,7 +144,7 @@ function selfTest(){
   f=fixture();f.P.battery={level:10,charging:true};ok('R-BATT: <30% + charging → pass',evaluate(f.P,f.R,f.c).overall==='ALLOW');
   for(const[id,mut]of Object.entries(NEG)){f=fixture();mut(f);const v=evaluate(f.P,f.R,f.c);ok(`${id} → ${v.overall}`,v.rules.find(r=>r.id===id).severity!=='pass'&&v.overall!=='ALLOW')}
   f=fixture();Object.assign(f.R,{kind:'full-dump',containsKeyMac:true,qixWrapped:false});f.c.path='rcsp';const cert={passport:{deviceId:'dev'},verified:true,sigOk:true,dumpSha256:'h'};
-  f.c.dumpCert=cert;ok('R-DUMP: own verified dump + RCSP → WARN',sevOf(f,'R-DUMP')==='warn'&&sevOf(f,'R-DUMP-INTEG')==='pass');
+  f.c.dumpCert={...cert,method:'wired-uboot'};ok('R-DUMP: own wired verified dump + RCSP → WARN',sevOf(f,'R-DUMP')==='warn'&&sevOf(f,'R-DUMP-INTEG')==='pass');
   f.c.dumpCert={...cert,verified:false};ok('R-DUMP-INTEG: unverified certificate → BLOCK',sevOf(f,'R-DUMP-INTEG')==='block');
   f.c.dumpCert={...cert,sigOk:false};ok('R-DUMP-INTEG: bad signature → BLOCK',sevOf(f,'R-DUMP-INTEG')==='block');
   f.c.dumpCert={...cert,dumpSha256:'other'};ok('R-DUMP-INTEG: certificate of another file → BLOCK',sevOf(f,'R-DUMP-INTEG')==='block');

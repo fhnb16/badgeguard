@@ -18,6 +18,7 @@ function init(){
   ['#phrase','#riskAck','#phoneBt'].forEach(s=>$(s).addEventListener('input',render));
   $('#btnFlash').onclick=flash;$('#btnAbort').onclick=()=>{if(ABORTABLE.includes(S.phase)){S.abort=true;if(QIX.abort)Promise.resolve().then(()=>QIX.abort({w,log})).catch(()=>{});log('EV','',null,'abort requested')}};
   $('#btnProbe').onclick=probe;$('#btnPC').onclick=powerCycled;$('#btnReport').onclick=()=>download('flash-report.json',S.report);
+  bindLab();
   $('#btnCopyLog').onclick=()=>copy(logText());$('#btnDlLog').onclick=()=>download('session.log',logText());
   $('#alAdd').onclick=()=>{const h=$('#alHash').value.trim().toLowerCase(),k=$('#alType').value;if(!/^[0-9a-f]{64}$/.test(h))return toast('SHA-256: 64 hex','warn');
     if(!S.allow[k].includes(h))S.allow[k].push(h);SV('allow',S.allow);$('#alHash').value='';renderAllow();render()};

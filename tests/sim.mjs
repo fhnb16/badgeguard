@@ -1,5 +1,5 @@
 // Требует jsdom: npm i -D jsdom; сначала node build.mjs
-// Интеграционный прогон: виртуальный E87 (auth-шифр как у устройства, bootstrap-аки, C7 фрагментами, push 0x27, TEST_GET_FLASH)
+// Интеграционный прогон: виртуальный E87 (auth, bootstrap, экран/батарея и безопасная блокировка BLE raw dump)
 import{JSDOM}from'jsdom';import{readFileSync}from'node:fs';import{webcrypto}from'node:crypto';
 const errs=[];const dom=new JSDOM(readFileSync(new URL('../dist-single/index.html',import.meta.url),'utf8'),{runScripts:'dangerously',pretendToBeVisual:true,
  beforeParse(w){Object.defineProperty(w,'crypto',{value:webcrypto});w.HTMLDialogElement.prototype.showModal=function(){};w.HTMLDialogElement.prototype.close=function(){};
@@ -34,11 +34,9 @@ const W=dom.window,D=W.document,sleep=ms=>new Promise(r=>setTimeout(r,ms));
 await sleep(500);D.querySelector('#btnConn').click();await sleep(6000);
 const P=W.eval('S.P');
 console.log('auth:',JSON.stringify(P.auth),'boot:',W.eval('S.boot'),'battery:',JSON.stringify(P.battery),'mac:',P.mac,'ti:',JSON.stringify(P.targetInfo),'display:',P.display&&P.display.width);
-console.log('dumpBtn disabled:',D.querySelector('#btnDump').disabled,'hint:',JSON.stringify(D.querySelector('#dumpHint').textContent));
-W.eval("S.set.dumpChunk=1024");const t0=Date.now();
-const buf=await W.eval("READBACK.dumpRange(rctx(),0,0x20000,()=>{})");
-let ok=true;for(let i=0;i<buf.length;i++)if(buf[i]!==((i*7)&255)){ok=false;break}
-console.log(`dump 128 KB: ${buf.length} B in ${Date.now()-t0} ms, reads=${W.SIM.reads}, content ok=${ok}`);
+console.log('qixFd00:',P.capabilities.qixFd00,'dumpBtn disabled:',D.querySelector('#btnDump').disabled,'hint:',JSON.stringify(D.querySelector('#dumpHint').textContent));
+if(P.capabilities.qixFd00||!D.querySelector('#btnDump').disabled)throw new Error('unsupported BLE raw dump must remain disabled');
+if(W.SIM.reads!==0)throw new Error('simulator must not request flash data');
 const B=await W.eval("readBatt()");console.log('readBatt (preflight):',B);
 console.log('errors:',errs);console.log(W.eval("S.log.filter(e=>/skipped|!chk|✕|E-/.test(e.note)).map(e=>e.note).slice(0,8)"));
 process.exit(0);

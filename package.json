@@ -1,3 +1,1 @@
-{"name":"badgeguard","version":"1.6.0","private":true,"type":"module","engines":{"node":">=18"},
- "scripts":{"test":"node tests/run.mjs","build":"node build.mjs","sim":"node tests/sim.mjs","check":"node tests/run.mjs && node build.mjs && node tests/sim.mjs"},
- "devDependencies":{"jsdom":"^24.0.0"}}
+{"name":"badgeguard","version":"1.6.0","private":true,"type":"module","engines":{"node":">=18"},"scripts":{"test":"node tests/run.mjs","build":"node build.mjs","sim":"node tests/sim.mjs","check":"node tests/run.mjs && node build.mjs && node tests/sim.mjs"},"devDependencies":{"jsdom":"^24.1.3"}}

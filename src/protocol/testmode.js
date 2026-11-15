@@ -5,8 +5,10 @@
  * и временная подписка на FD05 (канал «тяжёлых» передач; TEST_MODE и так требует power-cycle перед OTA). */
 const le32=n=>[n&255,n>>>8&255,n>>>16&255,n>>>24&255];
 const isAA=(u,n)=>u[3]===0xAA||u[3]===0xFF&&u[6]===0xAA;
-READBACK.ready=true;
-READBACK.dumpRange=async(ctx,addr,len,onProgress)=>{
+READBACK.ready=false;
+READBACK.dumpRange=async()=>{
+  throw new Error('E-DUMP-003 BLE flash readback is not supported on the confirmed AC697x/BR30 profile');
+  /* unreachable legacy implementation retained for reference until separately validated */
   if(!S.P||!S.P.auth.ok||!S.boot)throw new Error('E-DUMP-002 нужны auth + bootstrap');
   const tmo=Math.max(10000,S.set.reqTo),fd05=S.chars.fd05;let sub5=false;
   // HIL: на 0xAA бейдж сразу шлёт ack FF [AA 00] на FD03 — это «принято», не данные и не отказ.

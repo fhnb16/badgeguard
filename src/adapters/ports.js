@@ -18,7 +18,7 @@ const UFW={parse:null};
 const QIX={ready:false,begin:null,sendWindow:null,resume:null,apply:null,probe:null,abort:null};
 const RCSP_READY=false; // v1.1: vanilla RCSP restore
 
-/* READBACK — ПОРТИРОВАНО в src/protocol/testmode.js (qix-ble cmd_dump): dumpRange(ctx, addr, len, onProgress) → Uint8Array, on-flash форма, ставит TEST_MODE */
+/* READBACK — выключен: для подтверждённого AC697x/BR30 нет доказанного BLE flash-read ответа. Полный дамп — проводной UBOOT. */
 const READBACK={ready:false,dumpRange:null};
 /* PORT: jl-flash-decrypt + JL CRC (jieli-ble-badge-research)
    JL.decrypt(code) => Uint8Array (descrambled CODE) · JL.parseHeader(code) => bool

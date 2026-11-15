@@ -80,6 +80,36 @@
     <ol id="log" class="log mono" tabindex="0" aria-label="log"></ol>
   </section>
   <section class="panel panel--wide">
+    <h2 class="panel__h"><span class="panel__n">4</span><span data-i18n="deviceTools"></span></h2>
+    <div class="lab__row">
+      <label><span data-i18n="probeTransport"></span>
+        <select id="probeTransport"><option value="ae01">RCSP AE01 (FE)</option><option value="fd02">Sideband FD02 (9E)</option></select>
+      </label>
+      <label class="lab__frame"><span data-i18n="probeFrame"></span><input id="probeHex" class="inp mono" spellcheck="false" value="FE DC BA C0 03 00 06 01 FF FF FF FF 01 EF"></label>
+      <label><span data-i18n="probeTimeout"></span><input id="probeTimeout" type="number" min="500" max="10000" value="3000"></label>
+      <button id="btnRaw" class="btn" data-i18n="sendProbe"></button>
+      <button id="btnExportMatrix" class="btn">capability-matrix.json</button>
+    </div>
+    <p class="note" data-i18n="probeSafety"></p>
+    <pre id="rawResult" class="mono pre">—</pre>
+    <div class="row">
+      <button id="btnBrowse" class="btn" data-i18n="browseFiles"></button>
+      <button id="btnSmallList" class="btn" data-i18n="smallFiles"></button>
+      <button id="btnFetchResources" class="btn" data-i18n="fetchResources"></button>
+      <button id="btnExportResources" class="btn" data-i18n="exportResources"></button>
+      <button id="btnExportManifest" class="btn">resources-manifest.json</button>
+      <button id="btnOtaProbe" class="btn" data-i18n="otaProbe"></button>
+      <button id="btnScreen" class="btn" data-i18n="readScreen"></button>
+      <button id="btnHealth" class="btn" data-i18n="readHealth"></button>
+      <button id="btnTime" class="btn" data-i18n="syncTime"></button>
+    </div>
+    <div class="lab__row">
+      <label class="lab__file"><span data-i18n="contentImage"></span><input id="contentImage" type="file" accept="image/*"></label>
+      <button id="btnSendImage" class="btn" data-i18n="sendImage"></button>
+    </div>
+    <pre id="labResult" class="mono pre">—</pre>
+  </section>
+  <section class="panel panel--wide">
     <h2 class="panel__h"><span class="panel__n">⚙</span><span data-i18n="settings"></span></h2>
     <div class="set">
       <label><span data-i18n="s_connTo"></span><input type="number" data-set="connectTo" min="3000" max="60000" step="500"></label>
@@ -92,8 +122,6 @@
       <label><span data-i18n="s_lang"></span><select data-set="lang"><option value="ru">Русский</option><option value="en">English</option></select></label>
       <label class="chk"><input type="checkbox" data-set="expert"><span data-i18n="s_expert"></span></label>
       <label class="chk"><input type="checkbox" data-set="chime"><span data-i18n="s_chime"></span></label>
-      <label><span data-i18n="s_dumpSize"></span><select data-set="dumpSize"><option value="65536">64 KiB (проба)</option><option value="1048576">1 MiB</option><option value="2097152">2 MiB</option><option value="4194304">4 MiB</option><option value="8388608">8 MiB</option></select></label>
-      <label><span data-i18n="s_dumpChunk"></span><input type="number" data-set="dumpChunk" min="16" max="1024" step="16"></label>
       <label class="chk"><input type="checkbox" data-set="rcspPreAuth"><span data-i18n="s_preAuth"></span></label>
       <label class="chk"><input type="checkbox" data-set="readbackOffer"><span data-i18n="s_rbOffer"></span></label>
       <label><span data-i18n="s_spotN"></span><input type="number" data-set="spotN" min="4" max="64"></label>

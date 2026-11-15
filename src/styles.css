@@ -65,6 +65,7 @@ h2,h3{margin:0;font-weight:600}
 .log li{white-space:pre-wrap;overflow-wrap:anywhere}.log .tx{color:var(--cyan)}.log .rx{color:var(--mag)}.log .ev{color:var(--mute)}
 .set{display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:.6rem 1rem}
 .set label{display:flex;flex-direction:column;gap:.2rem;font-size:.85rem;color:var(--mute)}.set .chk{flex-direction:row;color:var(--text)}
+.lab__row{display:flex;align-items:end;gap:.6rem;flex-wrap:wrap;margin:.6rem 0}.lab__row label{display:flex;flex-direction:column;gap:.25rem;color:var(--mute);font-size:.85rem}.lab__row .lab__frame{flex:1;min-width:min(100%,26rem)}.lab__file{flex:1;min-width:16rem}
 .set2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem}@media (max-width:800px){.set2{grid-template-columns:minmax(0,1fr)}}
 .set2 h3{font-size:1rem;margin-bottom:.4rem}
 .allow{display:flex;flex-wrap:wrap;gap:.4rem}.allow input{flex:1;min-width:12rem;font-family:var(--mono);font-size:12px}
